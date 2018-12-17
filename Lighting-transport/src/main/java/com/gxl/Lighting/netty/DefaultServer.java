@@ -7,6 +7,7 @@ import com.gxl.Lighting.netty.codec.LightingDecoder;
 import com.gxl.Lighting.netty.codec.LightingEncoder;
 import com.gxl.Lighting.netty.heartbeat.HeartBeatHandler;
 import com.gxl.Lighting.rpc.DispatchHandler;
+import com.gxl.Lighting.rpc.processor.ProcessorManager;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -46,6 +47,11 @@ public class DefaultServer implements Server{
      * 每个服务器 需要维护下面所有的客户端
      */
     private Map<Channel, ClientMeta> clientMap = new ConcurrentHashMap<Channel, ClientMeta>();
+
+    /**
+     * 该服务器下 处理所有请求的对象
+     */
+    private ProcessorManager processorManager;
 
     /**
      * 每个客户端 最多允许 超时多少次

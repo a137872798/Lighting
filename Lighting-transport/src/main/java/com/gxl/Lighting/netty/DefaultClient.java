@@ -6,6 +6,7 @@ import com.gxl.Lighting.netty.codec.LightingDecoder;
 import com.gxl.Lighting.netty.codec.LightingEncoder;
 import com.gxl.Lighting.netty.heartbeat.HeartBeatHandler;
 import com.gxl.Lighting.rpc.*;
+import com.gxl.Lighting.rpc.processor.ProcessorManager;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
@@ -44,6 +45,11 @@ public class DefaultClient implements Client {
      * 重连间隔时间
      */
     private int reconnectionInterval;
+
+    /**
+     * 该客户端下处理所有请求的对象
+     */
+    private ProcessorManager processorManager;
 
     /**
      * 默认重连间隔时间
