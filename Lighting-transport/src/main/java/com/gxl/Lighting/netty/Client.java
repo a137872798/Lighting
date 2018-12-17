@@ -7,7 +7,7 @@ import com.gxl.Lighting.rpc.*;
  */
 public interface Client extends Remoting{
 
-    Connection connect(String address);
+    void connect(String address, int port);
 
     /**
      * 调用服务端方法  返回的结果 被封装成result 对象
@@ -37,10 +37,6 @@ public interface Client extends Remoting{
     int getConnectionTimeout();
 
     void setConnectionTimeout(int timeout);
-
-    boolean getAutoReconnection();
-
-    void setAutoReconnection(boolean autoReconnection);
 
     boolean isConnected();
 

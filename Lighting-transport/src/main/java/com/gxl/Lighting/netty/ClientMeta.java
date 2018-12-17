@@ -3,7 +3,7 @@ package com.gxl.Lighting.netty;
 import io.netty.channel.Channel;
 
 /**
- * 保存客户端 元素据
+ * 服务器端 保存客户端 的元素据
  */
 public class ClientMeta {
     private String address;

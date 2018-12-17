@@ -53,9 +53,8 @@ public class HeartBeatConfig {
             throw new IllegalArgumentException("allIdleTimeSeconds 不能小于等于0");
         }
         if(readerIdleTimeSeconds - writerIdleTimeSeconds <= 0){
-            logger.debug("基于当前框架 心跳检测的实现 一般写的时间间隔必须小于读的时间间隔 因为要考虑到 通信过程的延时 这里将会把 " +
-                    "readerIdleTimeSeconds 修改成 writerIdleTimeSeconds + 1s");
-            readerIdleTimeSeconds = writerIdleTimeSeconds + 1;
+            logger.debug("基于当前框架 心跳检测的实现 一般写的时间间隔必须小于读的时间间隔");
+            throw new IllegalArgumentException("基于当前框架 心跳检测的实现 一般写的时间间隔必须小于读的时间间隔");
         }
     }
 

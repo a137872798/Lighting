@@ -11,17 +11,14 @@ import java.util.Map;
 public interface Server extends Remoting{
 
     /**
-     * 绑定本地端口
-     */
-    void bind();
-
-    /**
      * 将服务 注册到 注册中心
      * @return
      */
     boolean register(String address);
 
-    void setRegistryAddress(String address);
+    void setRegistryAddress(String[] address);
+
+    void addRegistryAddress(String address);
 
     /**
      * 注册中心有多个

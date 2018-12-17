@@ -37,8 +37,12 @@ public class HeartBeatHandler extends IdleStateHandler {
     }
 
     public HeartBeatHandler(int readerIdleTimeSeconds, int writerIdleTimeSeconds, int allIdleTimeSeconds, boolean isClient) {
+        this(readerIdleTimeSeconds, writerIdleTimeSeconds, allIdleTimeSeconds, isClient, null);
+    }
+    public HeartBeatHandler(int readerIdleTimeSeconds, int writerIdleTimeSeconds, int allIdleTimeSeconds, boolean isClient, Server server) {
         super(readerIdleTimeSeconds, writerIdleTimeSeconds, allIdleTimeSeconds);
         this.isClient = isClient;
+        this.server = server;
     }
 
     /**

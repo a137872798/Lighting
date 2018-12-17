@@ -7,7 +7,7 @@ public interface Remoting {
 
     void start();
 
-    void shutdownGracefully(ShutdownHook hook);
+    void shutdownGracefully();
 
     void shutdown();
 }
