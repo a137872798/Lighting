@@ -139,7 +139,8 @@ public class DefaultClient implements Client {
                 ChannelPipeline pipeline = channel.pipeline();
                 pipeline.addLast("decoder", new LightingDecoder())
                         .addLast("encoder", new LightingEncoder())
-                        .addLast(new HeartBeatHandler(config.getReaderIdleTimeSeconds(), config.getWriterIdleTimeSeconds(), config.getAllIdleTimeSeconds(), true));
+                        .addLast(new HeartBeatHandler(config.getReaderIdleTimeSeconds(), config.getWriterIdleTimeSeconds(), config.getAllIdleTimeSeconds(), true))
+                        .addLast(new DispatchHandler());
             }
         });
         startConnectionTask();
@@ -195,11 +196,11 @@ public class DefaultClient implements Client {
         return channel.isActive();
     }
 
-    public RPCResult invokeSync(Request request) {
+    public RPCResult invokeSync(RPCRequest request) {
         return null;
     }
 
-    public void oneWay(Request request) {
+    public void oneWay(RPCRequest request) {
 
     }
 
@@ -211,7 +212,7 @@ public class DefaultClient implements Client {
         this.closed = closed;
     }
 
-    public RPCFuture invokeASync(Request request, Listener listener) {
+    public RPCFuture invokeASync(RPCRequest request, Listener listener) {
         return null;
     }
 

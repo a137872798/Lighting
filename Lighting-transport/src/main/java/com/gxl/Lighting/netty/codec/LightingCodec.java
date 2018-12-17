@@ -6,8 +6,8 @@ import com.gxl.Lighting.netty.enums.InvokeWayEnum;
 import com.gxl.Lighting.netty.enums.SerializationEnum;
 import com.gxl.Lighting.netty.serialization.Serialization;
 import com.gxl.Lighting.netty.serialization.SerializationFactory;
-import com.gxl.Lighting.rpc.RPCParam;
-import com.gxl.Lighting.rpc.RPCRequest;
+import com.gxl.Lighting.rpc.Request;
+import com.gxl.Lighting.rpc.RequestEnum;
 import com.gxl.Lighting.util.BytesUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
@@ -21,14 +21,14 @@ import java.util.List;
 /**
  * 管理通信协议的对象
  * FLAG 是 请求方式 和 序列化方式 LENGTH 是 消息体长度
- * |-----------------------------------------------------------------|
- * |MAGIC    2byte|FLAG      1byte|ID    8byte|LENGTH          4byte |
- * |-----------------------------------------------------------------|
+ * |------------------------------------------------------------------------------------------|
+ * |MAGIC    2byte|FLAG      1byte|Command       1byte|ID        8byte|LENGTH          4byte |
+ * |----------------------------------------------------------------------------------------|
  */
 public class LightingCodec {
 
 
-    //TODO 好像写了关于 Request 的 编解码 没有 Response的
+    //TODO 好像写了关于 Request 的 编解码 没有 Response的 可以考虑加在 flag 上
 
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(LightingCodec.class);
@@ -38,7 +38,7 @@ public class LightingCodec {
     /**
      * 请求头长度
      */
-    private static final int HEADER_LENGTH = 15;
+    private static final int HEADER_LENGTH = 16;
 
     /**
      * 协议魔法数
@@ -60,7 +60,6 @@ public class LightingCodec {
 
     private static final byte HESSIAN = (byte)1<<4;
 
-    private static final byte HEART_BEAT = (byte)1<<5;
 
     private LightingCodec(){ }
 
@@ -85,14 +84,15 @@ public class LightingCodec {
      * @param request
      * @param byteBuf
      */
-    public void encode(ChannelHandlerContext ctx, RPCRequest request, ByteBuf byteBuf) throws IOException{
+    public void encode(ChannelHandlerContext ctx, Request request, ByteBuf byteBuf) throws IOException{
         byte[] header = new byte[HEADER_LENGTH];
         //设置 魔法数
         BytesUtil.short2byte(MAGIC, header);
         //设置标识
         byte flag = getFlag(request);
         header[2] = flag;
-        BytesUtil.long2byte(request.getId(), header, 3);
+        header[3] = (byte) request.getCommand();
+        BytesUtil.long2byte(request.getId(), header, 4);
 
         int saveIndex = byteBuf.writerIndex();
         byteBuf.writerIndex(saveIndex + HEADER_LENGTH);
@@ -101,7 +101,7 @@ public class LightingCodec {
         Serialization serialization = SerializationFactory.newInstance(request.getSerialization());
         //创建输出流 方便序列化工具将 对象 写入
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        serialization.serialize(out, request.getRpcParam());
+        serialization.serialize(out, request.getParam());
         byte[] body = out.toByteArray();
         byteBuf.writeBytes(body);
         int bodySize = byteBuf.readableBytes();
@@ -133,25 +133,17 @@ public class LightingCodec {
         return HESSIAN;
     }
 
-    public static byte getHeartBeat() {
-        return HEART_BEAT;
-    }
-
     /**
      * 从request 中 解析出 标识
      * @param request
      * @return
      */
-    private byte getFlag(RPCRequest request) {
+    private byte getFlag(Request request) {
         String serialization = request.getSerialization();
         byte flag = SerializationEnum.getValue(serialization);
         if(flag == -1){
             logger.warn("没有找到与"+serialization+"对应的序列化方式, 默认使用json 进行序列化");
             flag = LightingCodec.getJSON();
-        }
-
-        if(request.isHeartBeat()){
-            flag |= HEART_BEAT;
         }
 
         String invokeWay = request.getInvokeWay();
@@ -193,49 +185,52 @@ public class LightingCodec {
         }
 
         //根据标识创建Request 对象
-        RPCRequest request = decodeFlag(header[2]);
-        request.setId(BytesUtil.bytes2long(header, 3));
+        Request request = decodeFlag(header[2],(int)header[3]);
+        request.setCommand(header[3]);
+        request.setId(BytesUtil.bytes2long(header, 4));
         byteBuf.readerIndex(saveIndex + HEADER_LENGTH);
         byte[] body = new byte[bodySize];
         byteBuf.readBytes(body);
         Serialization serialization = SerializationFactory.newInstance(request.getSerialization());
         Object result = serialization.deserialize(new ByteArrayInputStream(body), bodySize);
-        if(!(result instanceof RPCParam)){
+        if(!(result instanceof Request)){
             logger.error("从RPCRequest对象中 没有获取到RPCParam 对象");
             throw new CodecException("从RPCRequest对象中 没有获取到RPCParam 对象");
         }
+        list.add(result);
+        byteBuf.readerIndex(saveIndex + HEADER_LENGTH + bodySize);
     }
 
     /**
      * 解析标识并生成对应的 request 对象
-     * @param b
+     * @param flag
      * @return
      */
-    private RPCRequest decodeFlag(byte b) {
+    private Request decodeFlag(byte flag, int commadType) {
         String serialization = null;
         String invokeWay = null;
-        boolean isHeartBeat = false;
-        if((b & ONEWAY) == 1){
+        if((flag & ONEWAY) == 1){
             invokeWay = InvokeWayEnum.getValue(ONEWAY);
         }
-        if((b & SYNC) == 1){
+        if((flag & SYNC) == 1){
             invokeWay = InvokeWayEnum.getValue(SYNC);
         }
-        if((b & ASYNC) == 1){
+        if((flag & ASYNC) == 1){
             invokeWay = InvokeWayEnum.getValue(ASYNC);
         }
-        if((b & JSON) == 1){
+        if((flag & JSON) == 1){
             serialization = SerializationEnum.getValue(JSON);
         }
-        if((b & HESSIAN) == 1){
+        if((flag & HESSIAN) == 1){
             serialization = SerializationEnum.getValue(HESSIAN);
         }
-        if((b & HEART_BEAT) == 1){
-            isHeartBeat = true;
-        }
 
-        RPCRequest request = new RPCRequest();
-        request.setHeartBeat(isHeartBeat);
+        RequestEnum type = RequestEnum.indexOf(commadType);
+        if(type == null){
+            logger.error("请求对象的 命令类型不存在");
+            throw new CodecException("请求对象的 命令类型不存在");
+        }
+        Request request = Request.createRequest(type, null);
         request.setInvokeWay(invokeWay);
         request.setSerialization(serialization);
         return request;

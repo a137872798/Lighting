@@ -6,6 +6,7 @@ import com.gxl.Lighting.logging.InternalLoggerFactory;
 import com.gxl.Lighting.netty.codec.LightingDecoder;
 import com.gxl.Lighting.netty.codec.LightingEncoder;
 import com.gxl.Lighting.netty.heartbeat.HeartBeatHandler;
+import com.gxl.Lighting.rpc.DispatchHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -156,7 +157,8 @@ public class DefaultServer implements Server{
                                 .addLast(admin)
                                 .addLast(new HeartBeatHandler(heartBeatConfig.getReaderIdleTimeSeconds()
                                         , heartBeatConfig.getWriterIdleTimeSeconds()
-                                        , heartBeatConfig.getAllIdleTimeSeconds(), false, DefaultServer.this));
+                                        , heartBeatConfig.getAllIdleTimeSeconds(), false, DefaultServer.this))
+                                .addLast(new DispatchHandler());
                     }
                 });
         ChannelFuture future = serverBootstrap.bind();
