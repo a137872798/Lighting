@@ -1,9 +1,8 @@
 package com.gxl.Lighting;
 
-import java.util.AbstractSet;
-import java.util.Iterator;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 拓展 ConcurrentHashMap 对象
@@ -55,5 +54,14 @@ public class ConcurrentHashSet<E> extends AbstractSet<E> implements Set<E> {
     @Override
     public void clear() {
         map.clear();
+    }
+
+    public List<E> toList(){
+        List l = new CopyOnWriteArrayList();
+        Iterator<E> iterator = iterator();
+        while(iterator.hasNext()){
+            l.add(iterator().next());
+        }
+        return l;
     }
 }

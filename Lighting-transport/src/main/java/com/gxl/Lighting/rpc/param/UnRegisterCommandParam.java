@@ -1,19 +1,22 @@
-package com.gxl.Lighting.netty;
+package com.gxl.Lighting.rpc.param;
 
-/**
- * 向注册中心订阅的元数据
- */
-public class SubscributeMeta {
+import com.gxl.Lighting.rpc.CommandParam;
 
-    /**
-     * 代表订阅的 服务名
-     */
+public class UnRegisterCommandParam extends CommandParam {
+
+    private String address;
+
     private String serviceName;
 
-    /**
-     * 订阅的版本号
-     */
     private int version;
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
 
     public String getServiceName() {
         return serviceName;

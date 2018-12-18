@@ -23,7 +23,7 @@ public class ProcessorManager implements Processor{
 
     private ConcurrentMap<Respons>
 
-    public boolean addProcessor(RequestEnum requestEnum, Processor processor){
+    public boolean registerProcessor(RequestEnum requestEnum, Processor processor){
         if(requestEnum == null || processor == null){
             return false;
         }

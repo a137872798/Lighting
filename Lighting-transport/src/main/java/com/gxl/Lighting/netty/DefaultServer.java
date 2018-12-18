@@ -65,6 +65,10 @@ public class DefaultServer implements Server{
         ,HeartBeatConfig.getDefaultAllidletimeseconds());
     }
 
+    public DefaultServer(HeartBeatConfig config){
+        this.heartBeatConfig = config;
+    }
+
     public DefaultServer(int writerIdleTimeSeconds, int readerIdleTimeSeconds, int allIdleTimeSeconds) {
         checkParam(writerIdleTimeSeconds, readerIdleTimeSeconds, allIdleTimeSeconds);
         heartBeatConfig = new HeartBeatConfig(writerIdleTimeSeconds, readerIdleTimeSeconds, allIdleTimeSeconds);
@@ -204,6 +208,38 @@ public class DefaultServer implements Server{
         if(clientMap != null) {
             clientMap.clear();
         }
+    }
+
+    public void setRegistryAddress(Set<String> registryAddress) {
+        this.registryAddress = registryAddress;
+    }
+
+    public Channel getChannel() {
+        return channel;
+    }
+
+    public void setChannel(Channel channel) {
+        this.channel = channel;
+    }
+
+    public ServerBootstrap getServerBootstrap() {
+        return serverBootstrap;
+    }
+
+    public void setServerBootstrap(ServerBootstrap serverBootstrap) {
+        this.serverBootstrap = serverBootstrap;
+    }
+
+    public void setClientMap(Map<Channel, ClientMeta> clientMap) {
+        this.clientMap = clientMap;
+    }
+
+    public ProcessorManager getProcessorManager() {
+        return processorManager;
+    }
+
+    public void setProcessorManager(ProcessorManager processorManager) {
+        this.processorManager = processorManager;
     }
 
     public void shutdown() {

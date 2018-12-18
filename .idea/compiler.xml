@@ -6,6 +6,7 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
+        <module name="Lighting-common" />
         <module name="Lighting-logging" />
         <module name="Lighting-monitor" />
         <module name="Lighting-proxy" />
@@ -14,7 +15,13 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="Lighting" target="1.5" />
       <module name="Lighting-common" target="1.5" />
+      <module name="Lighting-logging" target="1.5" />
+      <module name="Lighting-monitor" target="1.5" />
+      <module name="Lighting-proxy" target="1.5" />
+      <module name="Lighting-registry" target="1.5" />
+      <module name="Lighting-transport" target="1.5" />
     </bytecodeTargetLevel>
   </component>
 </project>
