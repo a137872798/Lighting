@@ -57,7 +57,7 @@ public class DefaultClient implements Client {
     private static final int DEFAULT_RECONNECTION_INTERVAL = 10;
 
     /**
-     * 防止 duo'x
+     * 避免并发连接
      */
     private final Lock connectionLock = new ReentrantLock();
 
@@ -74,13 +74,6 @@ public class DefaultClient implements Client {
      * 使用cpu2倍的线程数 并使用netty 中可以生成独占线程的 线程工厂
      */
     private static final NioEventLoopGroup nioEventLoopGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors() * 2, new DefaultThreadFactory("NettyClientWorker", true));
-
-
-    /**
-     * 这里借鉴了 Dubbo 的 思想 在后台开启一个不断进行重连的 任务 但是我选择的实现不同 该对象只需要1条线程就能处理所有定时任务
-     * 并且 线程上下文切换没有这么激烈 每次以一个tick 为单位 使得线程sleep指定时间
-     */
-    private static final HashedWheelTimer timer = new HashedWheelTimer();
 
     private static final DefaultEventLoop reconnectionExecutor = new DefaultEventLoop();
 
@@ -154,31 +147,37 @@ public class DefaultClient implements Client {
 
     /**
      * 开始启动后台 重连任务
-     *
      */
     private void startConnectionTask() {
         logger.info("已经开启客户端定时重连任务");
         reconnectionFuture = reconnectionExecutor.scheduleWithFixedDelay(new Runnable() {
             public void run() {
                 if (!DefaultClient.this.isConnected()) {
-                    ChannelFuture future = DefaultClient.this.getBootstrap().connect();
-                    boolean result = future.awaitUninterruptibly(getConnectionTimeout(), TimeUnit.MILLISECONDS);
-                    if (result && future.isSuccess()) {
-                        Channel newChannel = future.channel();
-                        try {
-                            Channel oldChannel = DefaultClient.this.getChannel();
-                            if (oldChannel != null) {
-                                logger.info("在重新连接时 发现存在旧的连接将旧的连接关闭后 并创建了新的连接");
-                                oldChannel.close();
-                            }
-                        } finally {
-                            if (DefaultClient.this.isClosed()) {
-                                logger.info("在创建新连接时失败 因为客户端被关闭了");
-                                DefaultClient.this.channel = null;
-                            } else {
-                                DefaultClient.this.channel = newChannel;
+                    connectionLock.lock();
+                    try {
+                        if (!DefaultClient.this.isConnected()) {
+                            ChannelFuture future = DefaultClient.this.getBootstrap().connect();
+                            boolean result = future.awaitUninterruptibly(getConnectionTimeout(), TimeUnit.MILLISECONDS);
+                            if (result && future.isSuccess()) {
+                                Channel newChannel = future.channel();
+                                try {
+                                    Channel oldChannel = DefaultClient.this.getChannel();
+                                    if (oldChannel != null) {
+                                        logger.info("在重新连接时 发现存在旧的连接将旧的连接关闭后 并创建了新的连接");
+                                        oldChannel.close();
+                                    }
+                                } finally {
+                                    if (DefaultClient.this.isClosed()) {
+                                        logger.info("在创建新连接时失败 因为客户端被关闭了");
+                                        DefaultClient.this.channel = null;
+                                    } else {
+                                        DefaultClient.this.channel = newChannel;
+                                    }
+                                }
                             }
                         }
+                    } finally {
+                        connectionLock.unlock();
                     }
                 }
             }
@@ -202,11 +201,11 @@ public class DefaultClient implements Client {
         return channel.isActive();
     }
 
-    public RPCResult invokeSync(RPCRequest request) {
+    public RPCResult invokeSync(Request request) {
         return null;
     }
 
-    public void oneWay(RPCRequest request) {
+    public void oneWay(Request request) {
 
     }
 
@@ -218,15 +217,11 @@ public class DefaultClient implements Client {
         this.closed = closed;
     }
 
-    public RPCFuture invokeASync(RPCRequest request, Listener listener) {
+    public RPCFuture invokeASync(Request request, Listener listener) {
         return null;
     }
 
-    public RPCResult invokeSync(RPCParam param) {
-        return null;
-    }
-
-    public RPCFuture invokeASync(RPCParam param, Listener listener) {
+    public RPCFuture invokeASync(CommandParam param, Listener listener) {
         return null;
     }
 

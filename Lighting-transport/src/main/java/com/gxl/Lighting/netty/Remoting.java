@@ -11,8 +11,6 @@ public interface Remoting {
 
     void shutdownGracefully();
 
-    void shutdown();
-
     ProcessorManager getProcessorManager();
 
     void setProcessorManager(ProcessorManager manager);

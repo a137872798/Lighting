@@ -67,10 +67,12 @@ public class DefaultRegistry implements Registry {
 
     public DefaultRegistry() {
         server = new DefaultServer();
+        init();
     }
 
     public DefaultRegistry(HeartBeatConfig config) {
         server = new DefaultServer(config);
+        init();
     }
 
     //TODO 注册 processor 开启 服务器
@@ -82,42 +84,16 @@ public class DefaultRegistry implements Registry {
     }
 
     public void start() {
-        registryExecutor.execute(new Runnable() {
-            public void run() {
-                while (!shutdown.get()) {
-                    Runnable r1 = null;
-                    try {
-                        r1 = DefaultRegistry.this.task.take();
-                        r1.run();
-                    } catch (InterruptedException e) {
-                        logger.warn("注册中心工作线程被打断了");
-                    } catch (Throwable t) {
-                        final Runnable r2 = r1;
-                        scheduledExecutor.schedule(new Runnable() {
-                            public void run() {
-                                task.add(r2);
-                            }
-                        }, 1, TimeUnit.SECONDS);
-                    }
-                }
-            }
-        });
-
         server.start();
     }
 
     //从参数中抽取想要的 变量生成 订阅/注册信息后设置到任务队列中执行任务
 
     public void register(final RegisterCommandParam param) {
-        Runnable run = new Runnable() {
-            public void run() {
-                RegisterMeta meta = RegisterMeta.newMeta(param);
-                registers.add(meta);
-                addRegister(meta);
-                DefaultRegistry.this.notify(meta.getServiceMeta());
-            }
-        };
-        task.add(run);
+        RegisterMeta meta = RegisterMeta.newMeta(param);
+        registers.add(meta);
+        addRegister(meta);
+        DefaultRegistry.this.notify(meta.getServiceMeta());
     }
 
     /**
@@ -171,15 +147,10 @@ public class DefaultRegistry implements Registry {
      * @param param
      */
     public void unregister(final UnRegisterCommandParam param) {
-        Runnable run = new Runnable() {
-            public void run() {
-                RegisterMeta meta = RegisterMeta.newMeta(param);
-                registers.remove(meta);
-                removeRegister(meta);
-                DefaultRegistry.this.notify(meta.getServiceMeta());
-            }
-        };
-        task.add(run);
+        RegisterMeta meta = RegisterMeta.newMeta(param);
+        registers.remove(meta);
+        removeRegister(meta);
+        DefaultRegistry.this.notify(meta.getServiceMeta());
     }
 
 
@@ -189,16 +160,13 @@ public class DefaultRegistry implements Registry {
      * @param param
      */
     public void subscribute(final SubscributeCommandParam param) {
-        Runnable run = new Runnable() {
-            public void run() {
-                SubscributeMeta meta = SubscributeMeta.newMeta(param);
-                subscributes.add(meta);
-                addListener(meta, param.getListener());
-                addOldRegister(meta);
-                DefaultRegistry.this.notify(meta.getServiceMeta());
-            }
-        };
+        SubscributeMeta meta = SubscributeMeta.newMeta(param);
+        subscributes.add(meta);
+        addListener(meta, param.getListener());
+        addOldRegister(meta);
+        DefaultRegistry.this.notify(meta.getServiceMeta());
     }
+
 
     /**
      * 首次订阅时 应该将已经存在的对应的 服务提供者 添加进来 如果还不存在键值对  使用 putifabsent
@@ -260,15 +228,10 @@ public class DefaultRegistry implements Registry {
      * @param param
      */
     public void unsubscribute(final UnSubscributeCommandParam param) {
-        Runnable run = new Runnable() {
-            public void run() {
-                SubscributeMeta meta = SubscributeMeta.newMeta(param);
-                subscributes.remove(meta);
-                removeListener(meta);
-                removeSubscribute(meta);
-            }
-        };
-        task.add(run);
+        SubscributeMeta meta = SubscributeMeta.newMeta(param);
+        subscributes.remove(meta);
+        removeListener(meta);
+        removeSubscribute(meta);
     }
 
     /**

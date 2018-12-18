@@ -1,5 +1,6 @@
 package com.gxl.Lighting.netty;
 
+import com.gxl.Lighting.meta.SubscributeMeta;
 import com.gxl.Lighting.rpc.*;
 
 /**
@@ -13,20 +14,20 @@ public interface Client extends Remoting{
      * 调用服务端方法  返回的结果 被封装成result 对象
      * @return
      */
-    RPCResult invokeSync(RPCRequest request);
+    RPCResult invokeSync(Request request);
 
     /**
      * 基本是用来做心跳检测的
      * @param request
      */
-    void oneWay(RPCRequest request);
+    void oneWay(Request request);
 
     /**
      * 异步调用 通过监听器触发回调 返回一个future 对象
      * @param request
      * @param listener
      */
-    RPCFuture invokeASync(RPCRequest request, Listener listener);
+    RPCFuture invokeASync(Request request, Listener listener);
 
     /**
      * 向注册中心 订阅服务

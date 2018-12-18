@@ -11,22 +11,6 @@ import java.util.Map;
 public interface Server extends Remoting{
 
     /**
-     * 将服务 注册到 注册中心
-     * @return
-     */
-    boolean register(String address);
-
-    void setRegistryAddress(String[] address);
-
-    void addRegistryAddress(String address);
-
-    /**
-     * 注册中心有多个
-     * @return
-     */
-    String[] getRegistryAddress();
-
-    /**
      * 服务器 增加 心跳失败的 次数 因为 客户端会定期发送心跳包 没有收到 就代表 该channel 失效了
      */
     void addHeartBeatTimes(Channel channel);

@@ -8,6 +8,7 @@ import com.gxl.Lighting.rpc.Response;
 import com.gxl.Lighting.rpc.param.RegisterCommandParam;
 import io.netty.channel.ChannelHandlerContext;
 
+
 public class RegisterProcessor implements Processor {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(RegisterProcessor.class);
@@ -19,7 +20,7 @@ public class RegisterProcessor implements Processor {
     }
 
     public void processRequest(ChannelHandlerContext ctx, Request request) {
-        registry.registry((RegisterCommandParam)request.getParam());
+        registry.register((RegisterCommandParam)request.getParam());
     }
 
     public void processResponse(ChannelHandlerContext ctx, Response response) {

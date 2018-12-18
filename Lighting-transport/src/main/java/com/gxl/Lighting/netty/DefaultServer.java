@@ -93,9 +93,6 @@ public class DefaultServer implements Server{
         }
     }
 
-    public boolean register(String address) {
-        return false;
-    }
 
     public void setRegistryAddress(String[] address) {
         registryAddress.clear();

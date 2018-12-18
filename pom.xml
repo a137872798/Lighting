@@ -16,6 +16,7 @@
         <module>Lighting-common</module>
         <module>Lighting-logging</module>
         <module>Lighting-common</module>
+        <module>Lighting-application</module>
     </modules>
 
 
