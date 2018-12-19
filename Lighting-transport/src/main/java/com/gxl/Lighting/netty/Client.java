@@ -2,6 +2,7 @@ package com.gxl.Lighting.netty;
 
 import com.gxl.Lighting.meta.SubscributeMeta;
 import com.gxl.Lighting.rpc.*;
+import io.netty.channel.Channel;
 
 /**
  * RPC 通信的客户端接口
@@ -14,20 +15,21 @@ public interface Client extends Remoting{
      * 调用服务端方法  返回的结果 被封装成result 对象
      * @return
      */
-    RPCResult invokeSync(Request request);
+    Response invokeSync(String address, Request request, long timeout)throws InterruptedException
+            , RemotingSendException, RemotingTimeoutException;
 
     /**
-     * 基本是用来做心跳检测的
+     * 发送数据到监控中心时 一般是使用这个
      * @param request
      */
-    void oneWay(Request request);
+    void oneWay(String address, Request request);
 
     /**
      * 异步调用 通过监听器触发回调 返回一个future 对象
      * @param request
-     * @param listener
+     * @param callback
      */
-    RPCFuture invokeASync(Request request, Listener listener);
+    void invokeASync(String address, Request request, Callback callback, long timeout);
 
     /**
      * 向注册中心 订阅服务

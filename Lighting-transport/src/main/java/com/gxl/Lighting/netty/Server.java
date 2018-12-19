@@ -1,6 +1,5 @@
 package com.gxl.Lighting.netty;
 
-import com.gxl.Lighting.rpc.RPCResult;
 import io.netty.channel.Channel;
 
 import java.util.Map;

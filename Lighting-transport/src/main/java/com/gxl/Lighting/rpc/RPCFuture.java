@@ -9,9 +9,9 @@ public interface RPCFuture {
      * 等待指定时间
      * @param millions
      * @return
-     * @throws RPCTimeoutException
+     * @throws RemotingTimeoutException
      */
-    RPCResult getResult(long millions) throws RPCTimeoutException;
+    RPCResult getResult(long millions) throws RemotingTimeoutException;
 
     RPCResult getResult();
 

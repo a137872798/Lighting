@@ -20,9 +20,8 @@ public class UnRegisterProcessor implements Processor {
 
     public void processRequest(ChannelHandlerContext ctx, Request request) {
         registry.unregister((UnRegisterCommandParam) request.getParam());
-    }
-
-    public void processResponse(ChannelHandlerContext ctx, Response response) {
-
+        Response response = new Response(request.getId());
+        response.setSuccess(true);
+        ctx.writeAndFlush(response);
     }
 }

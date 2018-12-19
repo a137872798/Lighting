@@ -13,19 +13,18 @@ public class DispatchHandler extends ChannelInboundHandlerAdapter {
 
     ProcessorManager processorManager;
 
-    DispatchHandler(ProcessorManager processorManager){
+    public DispatchHandler(ProcessorManager processorManager){
         this.processorManager = processorManager;
     }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        //TODO 这里要根据请求头 类型 执行不同的操作
         if(msg instanceof Request){
             Request request = (Request)msg;
             processorManager.processRequest(ctx, request);
         } else if (msg instanceof Response){
             Response response = (Response)msg;
-            processorManager.
+            processorManager.processResponse(ctx, response);
         }
         super.channelRead(ctx, msg);
     }

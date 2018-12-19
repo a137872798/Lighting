@@ -21,9 +21,10 @@ public class RegisterProcessor implements Processor {
 
     public void processRequest(ChannelHandlerContext ctx, Request request) {
         registry.register((RegisterCommandParam)request.getParam());
+        //将结果写入对端
+        Response response = new Response(request.getId());
+        response.setSuccess(true);
+        ctx.writeAndFlush(response);
     }
 
-    public void processResponse(ChannelHandlerContext ctx, Response response) {
-
-    }
 }

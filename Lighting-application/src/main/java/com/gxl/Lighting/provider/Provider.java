@@ -1,5 +1,8 @@
 package com.gxl.Lighting.provider;
 
+import com.gxl.Lighting.rpc.RemotingSendException;
+import com.gxl.Lighting.rpc.RemotingTimeoutException;
+
 /**
  * 服务提供者接口
  */
@@ -19,7 +22,7 @@ public interface Provider {
 
     void start();
 
-    void unPublish();
+    boolean unRegister();
 
     /**
      * 终止该服务提供者 现在已经启动的服务提供者如果要更换配置 必须要 先 终止 再启动

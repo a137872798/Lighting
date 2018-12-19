@@ -9,8 +9,6 @@ import io.netty.channel.ChannelHandlerContext;
  */
 public interface Processor {
 
-    //todo 处理结果还没想好用什么类型
+    //实际处理的逻辑要转发 到 对应的 角色中
     void processRequest(ChannelHandlerContext ctx, Request request);
-
-    void processResponse(ChannelHandlerContext ctx, Response response);
 }

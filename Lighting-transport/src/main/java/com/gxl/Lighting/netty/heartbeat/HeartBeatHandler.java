@@ -32,10 +32,6 @@ public class HeartBeatHandler extends IdleStateHandler {
      */
     private Server server;
 
-    private static Request getHeartBeat() {
-        return new Request(true);
-    }
-
     public HeartBeatHandler(int readerIdleTimeSeconds, int writerIdleTimeSeconds, int allIdleTimeSeconds, boolean isClient) {
         this(readerIdleTimeSeconds, writerIdleTimeSeconds, allIdleTimeSeconds, isClient, null);
     }
@@ -56,6 +52,7 @@ public class HeartBeatHandler extends IdleStateHandler {
         //代表服务器 很久没有读取到数据  因为是个 后台定时任务 只要客户端没有发送新的请求 lastReadTime 不会被更新 那么 就会继续触发该事件
         if(evt.state() == IdleState.READER_IDLE && !isClient){
             server.addHeartBeatTimes(ctx.channel());
+            //TODO 这里要写 专门的 心跳包
             ctx.pipeline().write(getHeartBeat());
         }
         if(evt.state() == IdleState.WRITER_IDLE && isClient){

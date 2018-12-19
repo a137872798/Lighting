@@ -75,7 +75,6 @@ public class DefaultRegistry implements Registry {
         init();
     }
 
-    //TODO 注册 processor 开启 服务器
     private void init() {
         server.getProcessorManager().registerProcessor(RequestEnum.REGISTRY, new RegisterProcessor(this));
         server.getProcessorManager().registerProcessor(RequestEnum.SUBSCRIBUTE, new SubscributeProcessor(this));

@@ -82,12 +82,12 @@ public class Request {
         this.serialization = serialization;
     }
 
-    public long getId() {
-        return id;
-    }
-
     public void setId(long id) {
         this.id = id;
+    }
+
+    public long getId() {
+        return id;
     }
 
     public String getInvokeWay() {
@@ -96,5 +96,10 @@ public class Request {
 
     public void setInvokeWay(String invokeWay) {
         this.invokeWay = invokeWay;
+    }
+
+    @Override
+    public String toString() {
+        return "Request{" + "param=" + param + ", command=" + command + ", serialization='" + serialization + '\'' + ", id=" + id + ", invokeWay='" + invokeWay + '\'' + '}';
     }
 }
