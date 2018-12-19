@@ -72,6 +72,7 @@ public class DefaultServer implements Server{
     public DefaultServer(int writerIdleTimeSeconds, int readerIdleTimeSeconds, int allIdleTimeSeconds) {
         checkParam(writerIdleTimeSeconds, readerIdleTimeSeconds, allIdleTimeSeconds);
         heartBeatConfig = new HeartBeatConfig(writerIdleTimeSeconds, readerIdleTimeSeconds, allIdleTimeSeconds);
+        processorManager = new ProcessorManager();
     }
 
     private void checkParam(int writerIdleTimeSeconds, int readerIdleTimeSeconds, int allIdleTimeSeconds) {
@@ -165,7 +166,7 @@ public class DefaultServer implements Server{
                                 .addLast(new HeartBeatHandler(heartBeatConfig.getReaderIdleTimeSeconds()
                                         , heartBeatConfig.getWriterIdleTimeSeconds()
                                         , heartBeatConfig.getAllIdleTimeSeconds(), false, DefaultServer.this))
-                                .addLast(new DispatchHandler());
+                                .addLast(new DispatchHandler(processorManager));
                     }
                 });
         ChannelFuture future = serverBootstrap.bind();

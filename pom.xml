@@ -17,6 +17,7 @@
         <module>Lighting-logging</module>
         <module>Lighting-common</module>
         <module>Lighting-application</module>
+        <module>Lighting-cluster</module>
     </modules>
 
 

@@ -22,10 +22,6 @@ public enum RequestEnum {
      */
     UNSUBSCRIBUTE,
     /**
-     * 心跳检测
-     */
-    HEARTBEAT,
-    /**
      * RPC调用
      */
     INVOKE;

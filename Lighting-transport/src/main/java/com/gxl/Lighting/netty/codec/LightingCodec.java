@@ -4,6 +4,7 @@ import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
 import com.gxl.Lighting.netty.enums.InvokeWayEnum;
 import com.gxl.Lighting.netty.enums.SerializationEnum;
+import com.gxl.Lighting.netty.heartbeat.HeartBeat;
 import com.gxl.Lighting.netty.serialization.Serialization;
 import com.gxl.Lighting.netty.serialization.SerializationFactory;
 import com.gxl.Lighting.rpc.Request;
@@ -50,20 +51,18 @@ public class LightingCodec {
 
     private static final byte MAGIC_LOW = BytesUtil.short2byte(MAGIC)[1];
 
+    private static final byte JSON = (byte)1<<1;
 
-    private static final byte ONEWAY = (byte)1;
+    private static final byte HESSIAN = (byte)1<<2;
 
-    private static final byte SYNC = (byte)1<<1;
+    private static final byte REQUEST = (byte)1<<3;
 
-    private static final byte ASYNC = (byte)1<<2;
+    private static final byte RESPONSE = (byte)1<<4;
 
-    private static final byte JSON = (byte)1<<3;
-
-    private static final byte HESSIAN = (byte)1<<4;
-
-    private static final byte REQUEST = (byte)1<<5;
-
-    private static final byte RESPONSE = (byte)1<<6;
+    /**
+     * 携带就代表是心跳包
+     */
+    private static final byte HEARTBEAT = (byte)1<<5;
 
     private LightingCodec(){ }
 
@@ -95,7 +94,27 @@ public class LightingCodec {
         } else if(data instanceof Response){
             final Response response = (Response) data;
             encodeResponse(ctx, response, byteBuf);
+        } else if(data instanceof HeartBeat){
+            final HeartBeat heartBeat = (HeartBeat)data;
+            encodeHeartBeat(ctx, heartBeat, byteBuf);
         }
+
+    }
+
+    /**
+     * 心跳包 只需要一个协议头就可以
+     * @param ctx
+     * @param heartBeat
+     * @param byteBuf
+     */
+    private void encodeHeartBeat(ChannelHandlerContext ctx, HeartBeat heartBeat, ByteBuf byteBuf) {
+        byte[] header = new byte[HEADER_LENGTH];
+        //设置 魔法数
+        BytesUtil.short2byte(MAGIC, header);
+        //设置标识
+        header[2] = HEARTBEAT;
+        BytesUtil.int2byte(0, header, 12);
+        byteBuf.writeBytes(header);
     }
 
     /**
@@ -170,18 +189,6 @@ public class LightingCodec {
         byteBuf.writerIndex(saveIndex + HEADER_LENGTH + bodySize);
     }
 
-    public static byte getONEWAY() {
-        return ONEWAY;
-    }
-
-    public static byte getSYNC() {
-        return SYNC;
-    }
-
-    public static byte getASYNC() {
-        return ASYNC;
-    }
-
     public static byte getJSON() {
         return JSON;
     }
@@ -203,14 +210,6 @@ public class LightingCodec {
             flag = LightingCodec.getJSON();
         }
 
-        String invokeWay = request.getInvokeWay();
-        byte temp = InvokeWayEnum.getValue(invokeWay);
-        if(temp == -1){
-            logger.warn("没有找到与" + invokeWay + "对应的请求方式, 默认使用SYNC请求");
-            flag |= SYNC;
-        } else {
-            flag |= temp;
-        }
         flag |= REQUEST;
         return flag;
     }
@@ -270,6 +269,8 @@ public class LightingCodec {
             result = decodeRequest(ctx, byteBuf, list, header, body);
         } else if((header[2] & RESPONSE) != 1){
             result = decodeResponse(ctx, byteBuf, list, header, body);
+        } else if((header[2] & HEARTBEAT) != 1){
+            result = HeartBeat.createHeartBeat();
         }
         list.add(result);
     }
@@ -335,16 +336,6 @@ public class LightingCodec {
      */
     private Request decodeRequestFlag(byte flag, int commadType) {
         String serialization = null;
-        String invokeWay = null;
-        if((flag & ONEWAY) == 1){
-            invokeWay = InvokeWayEnum.getValue(ONEWAY);
-        }
-        if((flag & SYNC) == 1){
-            invokeWay = InvokeWayEnum.getValue(SYNC);
-        }
-        if((flag & ASYNC) == 1){
-            invokeWay = InvokeWayEnum.getValue(ASYNC);
-        }
         if((flag & JSON) == 1){
             serialization = SerializationEnum.getValue(JSON);
         }
@@ -358,7 +349,6 @@ public class LightingCodec {
             throw new CodecException("请求对象的 命令类型不存在");
         }
         Request request = Request.createRequest(type, null);
-        request.setInvokeWay(invokeWay);
         request.setSerialization(serialization);
         return request;
     }

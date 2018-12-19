@@ -3,14 +3,14 @@ package com.gxl.Lighting.rpc.param;
 import com.gxl.Lighting.NotifyListener;
 import com.gxl.Lighting.rpc.CommandParam;
 
-public class SubscributeCommandParam extends CommandParam{
+public class SubscributeCommandParam extends CommandParam {
 
     /**
-     * 服务名
+     * 服务名  可以 ， 拆分
      */
-    private String serivceName;
+    private String serviceName;
 
-    private int verison;
+    private int version;
 
     /**
      * 订阅者的地址
@@ -22,20 +22,20 @@ public class SubscributeCommandParam extends CommandParam{
      */
     private NotifyListener listener;
 
-    public String getSerivceName() {
-        return serivceName;
+    public String getServiceName() {
+        return serviceName;
     }
 
-    public void setSerivceName(String serivceName) {
-        this.serivceName = serivceName;
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
     }
 
-    public int getVerison() {
-        return verison;
+    public int getVersion() {
+        return version;
     }
 
-    public void setVerison(int verison) {
-        this.verison = verison;
+    public void setVersion(int version) {
+        this.version = version;
     }
 
     public String getAddress() {

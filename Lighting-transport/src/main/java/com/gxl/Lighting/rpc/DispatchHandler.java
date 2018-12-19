@@ -1,5 +1,6 @@
 package com.gxl.Lighting.rpc;
 
+import com.gxl.Lighting.netty.heartbeat.HeartBeat;
 import com.gxl.Lighting.rpc.processor.ProcessorManager;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -25,6 +26,8 @@ public class DispatchHandler extends ChannelInboundHandlerAdapter {
         } else if (msg instanceof Response){
             Response response = (Response)msg;
             processorManager.processResponse(ctx, response);
+        } else if (msg instanceof HeartBeat){
+            //noop 其实可以不用写这段 主要是 提醒自己已经 考虑到心跳包了
         }
         super.channelRead(ctx, msg);
     }

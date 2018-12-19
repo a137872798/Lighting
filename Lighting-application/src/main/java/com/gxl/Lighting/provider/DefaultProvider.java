@@ -8,6 +8,7 @@ import com.gxl.Lighting.netty.Client;
 import com.gxl.Lighting.netty.DefaultClient;
 import com.gxl.Lighting.netty.DefaultServer;
 import com.gxl.Lighting.netty.Server;
+import com.gxl.Lighting.provider.processor.InvokerProcessor;
 import com.gxl.Lighting.proxy.Invoker;
 import com.gxl.Lighting.rpc.*;
 import com.gxl.Lighting.rpc.param.RegisterCommandParam;
@@ -26,6 +27,7 @@ public class DefaultProvider implements Provider {
      */
     private Client client;
 
+    //TODO 这里要思考 怎么才能指定端口
     private Server server;
 
     private Server vipServer;
@@ -60,17 +62,29 @@ public class DefaultProvider implements Provider {
         client = new DefaultClient();
         server = new DefaultServer();
         vipServer = new DefaultServer();
-        server.getProcessorManager().registerProcessor(RequestEnum.INVOKE)
+        server.getProcessorManager().registerProcessor(RequestEnum.INVOKE, new InvokerProcessor());
+        vipServer.getProcessorManager().registerProcessor(RequestEnum.INVOKE, new InvokerProcessor());
     }
 
+    //每次 发布 必须是 提供者 处于停止 状态  可以做成热部署 但是在并发情况下会有很多发布请求吧 这样不知道是否合适
+
     public void publishService(Object o) {
+        if(start.get()) {
+            logger.warn("服务提供者已经启动，请先停止提供者再发布新服务");
+            return;
+        }
         exports.add(o);
     }
 
     public void publishServices(Object... o) {
+        if(start.get()) {
+            logger.warn("服务提供者已经启动，请先停止提供者再发布新服务");
+            return;
+        }
         for (Object temp : o) {
             exports.add(o);
         }
+
     }
 
     /**
@@ -95,6 +109,9 @@ public class DefaultProvider implements Provider {
                     logger.warn("服务发布失败,关闭服务提供者");
                     shutdownGracefully();
                 }
+            }else{
+                //因为 参数校验失败 要 修改成 未启动状态
+                start.set(false);
             }
         } else {
             logger.warn("该服务提供者已经启动");

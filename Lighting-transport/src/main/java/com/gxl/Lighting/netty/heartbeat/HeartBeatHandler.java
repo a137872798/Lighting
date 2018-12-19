@@ -43,6 +43,8 @@ public class HeartBeatHandler extends IdleStateHandler {
 
     /**
      * 实现心跳检测的 核心方法  该方法 通过检测 传入的 evt 来判断是需要发送哪种心跳事件
+     * 这里做的是 单向的心跳检测 只需要客户端向服务器发心跳包 一旦 服务器 3次 触发超时时间 就 断开连接 同时客户端开始重连
+     *
      * @param ctx
      * @param evt
      * @throws Exception
@@ -52,14 +54,12 @@ public class HeartBeatHandler extends IdleStateHandler {
         //代表服务器 很久没有读取到数据  因为是个 后台定时任务 只要客户端没有发送新的请求 lastReadTime 不会被更新 那么 就会继续触发该事件
         if(evt.state() == IdleState.READER_IDLE && !isClient){
             server.addHeartBeatTimes(ctx.channel());
-            //TODO 这里要写 专门的 心跳包
-            ctx.pipeline().write(getHeartBeat());
         }
         if(evt.state() == IdleState.WRITER_IDLE && isClient){
             //因为 write 直接去了 上个节点 就无法触发本节点的 write 了 然后父类 在write 中 更新了 LastWriteTime 必须要触发这个
             //netty 的write 返回的 future 无法标记 当写入JDK channel 失败时 的状态  不能通过这种方式判断是否重连
             //直接在 客户端最外层进行重连就可以了
-            ctx.pipeline().write(getHeartBeat());
+            ctx.pipeline().write(HeartBeat.createHeartBeat());
         }
         //All事件 不处理了 上面2种已经概括全部可能了
     }

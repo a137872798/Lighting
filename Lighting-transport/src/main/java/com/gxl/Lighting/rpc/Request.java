@@ -36,8 +36,6 @@ public class Request {
 
     private long id;
 
-    private String invokeWay;
-
     private Request(int command){
         this(command, null);
     }
@@ -90,16 +88,8 @@ public class Request {
         return id;
     }
 
-    public String getInvokeWay() {
-        return invokeWay;
-    }
-
-    public void setInvokeWay(String invokeWay) {
-        this.invokeWay = invokeWay;
-    }
-
     @Override
     public String toString() {
-        return "Request{" + "param=" + param + ", command=" + command + ", serialization='" + serialization + '\'' + ", id=" + id + ", invokeWay='" + invokeWay + '\'' + '}';
+        return "Request{" + "param=" + param + ", command=" + command + ", serialization='" + serialization + '\'' + ", id=" + id  + '\'' + '}';
     }
 }

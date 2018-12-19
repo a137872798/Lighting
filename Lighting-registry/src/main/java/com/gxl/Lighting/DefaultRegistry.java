@@ -14,11 +14,10 @@ import com.gxl.Lighting.rpc.param.RegisterCommandParam;
 import com.gxl.Lighting.rpc.param.SubscributeCommandParam;
 import com.gxl.Lighting.rpc.param.UnRegisterCommandParam;
 import com.gxl.Lighting.rpc.param.UnSubscributeCommandParam;
-import com.gxl.Lighting.rpc.processor.RegisterProcessor;
-import com.gxl.Lighting.rpc.processor.SubscributeProcessor;
-import com.gxl.Lighting.rpc.processor.UnRegisterProcessor;
-import com.gxl.Lighting.rpc.processor.UnSubscributeProcessor;
-import com.gxl.Lighting.util.ParamUtil;
+import com.gxl.Lighting.processor.RegisterProcessor;
+import com.gxl.Lighting.processor.SubscributeProcessor;
+import com.gxl.Lighting.processor.UnRegisterProcessor;
+import com.gxl.Lighting.processor.UnSubscributeProcessor;
 
 import java.util.List;
 import java.util.Map;
@@ -50,12 +49,12 @@ public class DefaultRegistry implements Registry {
     private final ConcurrentHashSet<SubscributeMeta> subscributes = new ConcurrentHashSet<SubscributeMeta>();
 
     /**
-     * 针对服务级别的监听器
+     * 监听的是 服务级别 但是订阅的时候 可以一次针对多个 ServiceMeta 进行监听
      */
     private final ConcurrentMap<ServiceMeta, ConcurrentHashMap<String, NotifyListener>> notifyListeners = new ConcurrentHashMap<ServiceMeta, ConcurrentHashMap<String, NotifyListener>>();
 
     /**
-     * 每个订阅者下面的 全部注册服务
+     * 每个订阅者下面的 全部注册服务  这里value 必须是 registerMeta 因为 需要 服务的 地址
      */
     private final ConcurrentMap<SubscributeMeta, CopyOnWriteArrayList<RegisterMeta>> srInfo = new ConcurrentHashMap<SubscributeMeta, CopyOnWriteArrayList<RegisterMeta>>();
 
@@ -98,16 +97,18 @@ public class DefaultRegistry implements Registry {
     /**
      * 通知订阅者
      *
-     * @param meta
+     * @param serviceMetas
      */
-    private void notify(ServiceMeta meta) {
-        ConcurrentMap<String, NotifyListener> listeners = notifyListeners.get(meta);
-        if (listeners != null) {
-            for (Map.Entry<String, NotifyListener> temp : listeners.entrySet()) {
-                String address = temp.getKey();
-                for (SubscributeMeta subscribute : srInfo.keySet()) {
-                    if (subscribute.getAddress().equals(address)) {
-                        temp.getValue().notify(srInfo.get(subscribute));
+    private void notify(ServiceMeta[] serviceMetas) {
+        for (ServiceMeta serviceMeta : serviceMetas) {
+            ConcurrentMap<String, NotifyListener> listeners = notifyListeners.get(serviceMeta);
+            if (listeners != null) {
+                for (Map.Entry<String, NotifyListener> temp : listeners.entrySet()) {
+                    String address = temp.getKey();
+                    for (SubscributeMeta subscribute : srInfo.keySet()) {
+                        if (subscribute.getAddress().equals(address)) {
+                            temp.getValue().notify(srInfo.get(subscribute));
+                        }
                     }
                 }
             }
@@ -120,9 +121,18 @@ public class DefaultRegistry implements Registry {
      * @param meta
      */
     private void addRegister(RegisterMeta meta) {
+        ServiceMeta[] metas = meta.getServiceMeta();
         for (SubscributeMeta subscribute : srInfo.keySet()) {
-            if (subscribute.getServiceMeta().getServiceName().equals(meta.getServiceMeta().getServiceName()) && subscribute.getServiceMeta().getVersion() == meta.getServiceMeta().getVersion()) {
-                srInfo.get(subscribute).add(meta);
+            //直接跳跃到这里 只要有一个能对应上 就代表这个订阅者可以获取到 这个 提供者的 信息 避免重复添加
+            loop:
+            //该订阅者订阅的 全部 服务
+            for (ServiceMeta serviceMeta : subscribute.getServiceMeta()) {
+                for (ServiceMeta registerMeta : metas) {
+                    if (serviceMeta == registerMeta) {
+                        srInfo.get(subscribute).add(meta);
+                        continue loop;
+                    }
+                }
             }
         }
     }
@@ -133,9 +143,11 @@ public class DefaultRegistry implements Registry {
      * @param meta
      */
     private void removeRegister(RegisterMeta meta) {
-        for (SubscributeMeta subscribute : srInfo.keySet()) {
-            if (subscribute.getServiceMeta().getServiceName().equals(meta.getServiceMeta().getServiceName()) && subscribute.getServiceMeta().getVersion() == meta.getServiceMeta().getVersion()) {
-                srInfo.get(subscribute).remove(meta);
+        for (Map.Entry<SubscributeMeta, CopyOnWriteArrayList<RegisterMeta>> entry : srInfo.entrySet()) {
+            for (RegisterMeta registerMeta : entry.getValue()) {
+                if (registerMeta.equals(meta)) {
+                    entry.getValue().remove(meta);
+                }
             }
         }
     }
@@ -174,14 +186,26 @@ public class DefaultRegistry implements Registry {
      */
     private void addOldRegister(SubscributeMeta meta) {
         for (RegisterMeta temp : registers) {
-            if (temp.getServiceMeta().equals(meta.getServiceMeta())) {
-                if (!srInfo.containsKey(meta)) {
-                    CopyOnWriteArrayList list = new CopyOnWriteArrayList();
-                    CopyOnWriteArrayList old = srInfo.putIfAbsent(meta, list);
-                    if (old != null) {
-                        list = old;
+            ServiceMeta[] subscributeMetas = meta.getServiceMeta();
+            ServiceMeta[] registerMetas = temp.getServiceMeta();
+            //避免重复添加
+            loop:
+            for (ServiceMeta serviceMeta : subscributeMetas) {
+                for (ServiceMeta registerMeta : registerMetas) {
+                    if (registerMeta.equals(serviceMeta)) {
+                        if (!srInfo.containsKey(meta)) {
+                            CopyOnWriteArrayList<RegisterMeta> list = new CopyOnWriteArrayList<RegisterMeta>();
+                            CopyOnWriteArrayList old = srInfo.putIfAbsent(meta, list);
+                            if (old != null) {
+                                list = old;
+                            }
+                            list.add(temp);
+                            continue loop;
+                        } else {
+                            srInfo.get(meta).add(temp);
+                            continue loop;
+                        }
                     }
-                    list.add(temp);
                 }
             }
         }
@@ -194,32 +218,35 @@ public class DefaultRegistry implements Registry {
      * @param listener
      */
     private void addListener(SubscributeMeta meta, NotifyListener listener) {
-        ConcurrentHashMap<String, NotifyListener> listenerMap = new ConcurrentHashMap<String, NotifyListener>();
-        if (!notifyListeners.containsKey(meta.getServiceMeta())) {
-            ConcurrentHashMap<String, NotifyListener> old = notifyListeners.putIfAbsent(meta.getServiceMeta(), listenerMap);
-            if (old != null) {
-                listenerMap = old;
+        ServiceMeta[] serviceMetas = meta.getServiceMeta();
+        for (ServiceMeta serviceMeta : serviceMetas) {
+            ConcurrentHashMap<String, NotifyListener> listenerMap = new ConcurrentHashMap<String, NotifyListener>();
+            if (!notifyListeners.containsKey(serviceMeta)) {
+                ConcurrentHashMap<String, NotifyListener> old = notifyListeners.putIfAbsent(serviceMeta, listenerMap);
+                if (old != null) {
+                    listenerMap = old;
+                }
+                listenerMap.put(meta.getAddress(), listener);
+            } else {
+                notifyListeners.get(serviceMeta).put(meta.getAddress(), listener);
             }
         }
-        listenerMap.put(meta.getAddress(), listener);
     }
 
     /**
      * 移除监听器
      */
     private void removeListener(SubscributeMeta meta) {
-        ServiceMeta serviceMeta = meta.getServiceMeta();
-        for (ServiceMeta temp : notifyListeners.keySet()) {
-            if (temp.getServiceName().equals(serviceMeta.getServiceName())) {
-                ConcurrentHashMap<String, NotifyListener> map = notifyListeners.get(temp);
-                for (String address : map.keySet()) {
-                    if (address.equals(meta.getAddress())) {
-                        map.remove(address);
-                    }
-                }
-            }
+        ServiceMeta[] serviceMetas = meta.getServiceMeta();
+        for (ServiceMeta serviceMeta : serviceMetas) {
+            ConcurrentMap<String, NotifyListener> listener = notifyListeners.get(meta);
+            listener.remove(meta.getAddress());
+            if(listener.size() == 0){
+                notifyListeners.remove(meta);
         }
     }
+
+}
 
     /**
      * 取消订阅
@@ -240,7 +267,7 @@ public class DefaultRegistry implements Registry {
      */
     private void removeSubscribute(SubscributeMeta meta) {
         for (SubscributeMeta temp : srInfo.keySet()) {
-            if (temp.getAddress().equals(meta.getAddress()) && temp.getServiceMeta().getServiceName().equals(meta.getServiceMeta().getServiceName())) {
+            if (temp.equals(meta)) {
                 srInfo.remove(temp);
             }
         }
