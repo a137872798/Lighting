@@ -170,7 +170,7 @@ public class DefaultClient implements Client {
     public void invokeAsync(String address, final Request request, Callback callback, long timeout) {
         Channel channel = channelTable.get(address);
         if (channel == null) {
-            logger.warn("没有找到{}对应的通道对象", address);
+            logger.warn("没有找到{}对应的通道对象 现在开始连接", address);
             String[] addresses = StringUtil.split(address, ":");
             connect(addresses[0], Integer.valueOf(addresses[1]));
             channel = channelTable.get(address);
@@ -218,7 +218,7 @@ public class DefaultClient implements Client {
         long startTime = System.currentTimeMillis();
         Channel channel = channelTable.get(address);
         if (channel == null) {
-            logger.warn("没有找到{}对应的通道对象 现在开始创建", address);
+            logger.warn("没有找到{}对应的通道对象 现在开始连接", address);
             String[] addresses = StringUtil.split(address, ":");
             connect(addresses[0], Integer.valueOf(addresses[1]));
             channel = channelTable.get(address);
@@ -263,7 +263,13 @@ public class DefaultClient implements Client {
      * @param request
      */
     public void oneWay(String address, Request request) {
-        final Channel channel = channelTable.get(address);
+        Channel channel = channelTable.get(address);
+        if (channel == null) {
+            logger.warn("没有找到{}对应的通道对象 现在开始连接", address);
+            String[] addresses = StringUtil.split(address, ":");
+            connect(addresses[0], Integer.valueOf(addresses[1]));
+            channel = channelTable.get(address);
+        }
         channel.writeAndFlush(request);
     }
 

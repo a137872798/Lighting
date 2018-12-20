@@ -11,6 +11,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class ResponseFuture {
 
+    //TODO 这里需要一个 任务开始时间 清理 future 对象应该是 按照那个时间来执行 而不是 一个固定时间
+
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(ResponseFuture.class);
 
     /**

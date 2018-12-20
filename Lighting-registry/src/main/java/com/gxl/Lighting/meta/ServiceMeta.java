@@ -38,12 +38,14 @@ public class ServiceMeta {
         ServiceMeta that = (ServiceMeta) o;
 
         if (version != that.version) return false;
-        return serviceName != null ? serviceName.equals(that.serviceName) : that.serviceName == null;
+        if (serviceName != null ? !serviceName.equals(that.serviceName) : that.serviceName != null) return false;
+        return methodMeta != null ? methodMeta.equals(that.methodMeta) : that.methodMeta == null;
     }
 
     @Override
     public int hashCode() {
         int result = serviceName != null ? serviceName.hashCode() : 0;
+        result = 31 * result + (methodMeta != null ? methodMeta.hashCode() : 0);
         result = 31 * result + version;
         return result;
     }

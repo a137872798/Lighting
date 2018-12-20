@@ -1,5 +1,8 @@
 package com.gxl.Lighting.rpc;
 
+import com.gxl.Lighting.loadbalance.LoadBalance;
+import com.gxl.Lighting.loadbalance.RoundRobinLoadBalance;
+
 import java.lang.annotation.*;
 
 @Target(ElementType.TYPE)
@@ -13,19 +16,14 @@ public @interface RPC {
      * 使用的 负载策略
      * @return
      */
-    String balanceStrategy() default "RoundRobin";
+    Class<? extends LoadBalance> balanceStrategy() default RoundRobinLoadBalance.class;
 
     /**
-     * 是否使用特殊端口
+     * 是否使用vip端口  vip端口的 端口号默认比普通的 多2
      * @return
      */
     boolean vip() default false;
 
-    /**
-     * 服务提供者的发布名
-     * @return
-     */
-    String serviceName() default "";
 
     /**
      * 通信使用的序列化方式
@@ -37,5 +35,5 @@ public @interface RPC {
      * 通信方式  A:async S:sync O:oneWay
      * @return
      */
-    String type() default "S";
+    String invokeType() default "S";
 }

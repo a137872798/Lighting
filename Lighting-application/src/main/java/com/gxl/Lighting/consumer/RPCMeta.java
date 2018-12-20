@@ -1,6 +1,9 @@
 package com.gxl.Lighting.consumer;
 
-import com.gxl.Lighting.balance.Balance;
+import com.gxl.Lighting.loadbalance.LoadBalance;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 从 RPC 注解上获取的 元数据信息
@@ -20,7 +23,7 @@ public class RPCMeta {
     /**
      * 使用的均衡负载策略
      */
-    private String balance;
+    private Class<? extends LoadBalance> loadBalance;
 
     /**
      * 是否使用vip 端口
@@ -29,7 +32,7 @@ public class RPCMeta {
 
     private String serviceName;
 
-    private String type;
+    private String invokeType;
 
     private String serialization;
 
@@ -50,12 +53,12 @@ public class RPCMeta {
         this.timeout = timeout;
     }
 
-    public String getBalance() {
-        return balance;
+    public Class<? extends LoadBalance> getLoadBalance() {
+        return loadBalance;
     }
 
-    public void setBalance(String balance) {
-        this.balance = balance;
+    public void setLoadBalance(Class<? extends LoadBalance> loadBalance) {
+        this.loadBalance = loadBalance;
     }
 
     public boolean isVip() {
@@ -74,12 +77,12 @@ public class RPCMeta {
         this.serviceName = serviceName;
     }
 
-    public String getType() {
-        return type;
+    public String getInvokeType() {
+        return invokeType;
     }
 
-    public void setType(String type) {
-        this.type = type;
+    public void setInvokeType(String invokeType) {
+        this.invokeType = invokeType;
     }
 
     public String getSerialization() {

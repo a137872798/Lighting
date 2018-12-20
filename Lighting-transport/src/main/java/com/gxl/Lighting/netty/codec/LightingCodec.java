@@ -2,7 +2,7 @@ package com.gxl.Lighting.netty.codec;
 
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
-import com.gxl.Lighting.netty.enums.InvokeWayEnum;
+import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
 import com.gxl.Lighting.netty.enums.SerializationEnum;
 import com.gxl.Lighting.netty.heartbeat.HeartBeat;
 import com.gxl.Lighting.netty.serialization.Serialization;
@@ -11,6 +11,7 @@ import com.gxl.Lighting.rpc.Request;
 import com.gxl.Lighting.rpc.RequestEnum;
 import com.gxl.Lighting.rpc.Response;
 import com.gxl.Lighting.util.BytesUtil;
+import com.gxl.Lighting.util.StringUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.CodecException;
@@ -51,13 +52,19 @@ public class LightingCodec {
 
     private static final byte MAGIC_LOW = BytesUtil.short2byte(MAGIC)[1];
 
-    private static final byte JSON = (byte)1<<1;
+    private static final byte JSON = (byte)1<<0;
 
-    private static final byte HESSIAN = (byte)1<<2;
+    private static final byte HESSIAN = (byte)1<<1;
 
-    private static final byte REQUEST = (byte)1<<3;
+    private static final byte REQUEST = (byte)1<<2;
 
-    private static final byte RESPONSE = (byte)1<<4;
+    private static final byte RESPONSE = (byte)1<<3;
+
+    private static final byte SYNC = (byte)1<<4;
+
+    private static final byte ASYNC = (byte)1<<5;
+
+    private static final byte ONEWAY = (byte)1<<6;
 
     /**
      * 携带就代表是心跳包
@@ -206,10 +213,13 @@ public class LightingCodec {
         String serialization = request.getSerialization();
         byte flag = SerializationEnum.getValue(serialization);
         if(flag == -1){
-            logger.warn("没有找到与"+serialization+"对应的序列化方式, 默认使用json 进行序列化");
-            flag = LightingCodec.getJSON();
+            throw new IllegalArgumentException("request对象的序列化参数异常");
         }
-
+        byte invoke = InvokeTypeEnum.getValue(request.getInvokeType());
+        if(invoke == -1){
+            throw new IllegalArgumentException("request对象的通信类型异常");
+        }
+        flag |= invoke;
         flag |= REQUEST;
         return flag;
     }
@@ -300,14 +310,19 @@ public class LightingCodec {
      * @param flag
      */
     private String decodeSerialization(byte flag) {
-        String serialization = null;
-        if((flag & JSON) == 1){
-            serialization = SerializationEnum.getValue(JSON);
-        }
-        if((flag & HESSIAN) == 1){
-            serialization = SerializationEnum.getValue(HESSIAN);
+        String serialization = SerializationEnum.getValue(flag);
+        if(StringUtil.isEmpty(serialization)){
+            throw new IllegalArgumentException("待解析数据的序列化标识异常");
         }
         return serialization;
+    }
+
+    private String decodeInvokeType(byte flag){
+        String invokeType = InvokeTypeEnum.getValue(flag);
+        if(StringUtil.isEmpty(invokeType)){
+            throw new IllegalArgumentException("待解析数据的通信标识序列化异常");
+        }
+        return invokeType;
     }
 
     /**
@@ -321,35 +336,26 @@ public class LightingCodec {
     private Object decodeRequest(ChannelHandlerContext ctx, ByteBuf byteBuf, List<Object> list, byte[] header, byte[] body) throws IOException {
         //根据标识创建Request 对象
         String serializationType = decodeSerialization(header[2]);
+        String invokeType = decodeInvokeType(header[2]);
         Serialization serialization = SerializationFactory.newInstance(serializationType);
         Object result = serialization.deserialize(new ByteArrayInputStream(body), body.length);
         if(!(result instanceof Request)){
             throw new CodecException("解码异常");
         }
+        Request request = (Request) result;
+        request.setInvokeType(invokeType);
         return result;
     }
 
-    /**
-     * 解析标识并生成对应的 request 对象
-     * @param flag
-     * @return
-     */
-    private Request decodeRequestFlag(byte flag, int commadType) {
-        String serialization = null;
-        if((flag & JSON) == 1){
-            serialization = SerializationEnum.getValue(JSON);
-        }
-        if((flag & HESSIAN) == 1){
-            serialization = SerializationEnum.getValue(HESSIAN);
-        }
+    public static byte getSYNC() {
+        return SYNC;
+    }
 
-        RequestEnum type = RequestEnum.indexOf(commadType);
-        if(type == null){
-            logger.error("请求对象的 命令类型不存在");
-            throw new CodecException("请求对象的 命令类型不存在");
-        }
-        Request request = Request.createRequest(type, null);
-        request.setSerialization(serialization);
-        return request;
+    public static byte getASYNC() {
+        return ASYNC;
+    }
+
+    public static byte getONEWAY() {
+        return ONEWAY;
     }
 }

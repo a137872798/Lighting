@@ -15,8 +15,14 @@ public class RPCInvocationHanlder implements InvocationHandler{
     }
 
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        //设置 rpc 参数对象
         InvokerCommandParam param = new InvokerCommandParam();
+        param.setMethodName(method.getName());
+        param.setParamTypes(method.getParameterTypes());
+        param.setParams(args);
 
+        //开始远程通信
+        rpcInvocation.invoke(param);
         return null;
     }
 }

@@ -10,6 +10,8 @@ import com.gxl.Lighting.meta.ServiceMeta;
 import com.gxl.Lighting.meta.SubscributeMeta;
 import com.gxl.Lighting.netty.Client;
 import com.gxl.Lighting.netty.DefaultClient;
+import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
+import com.gxl.Lighting.netty.enums.SerializationEnum;
 import com.gxl.Lighting.proxy.ProxyFactory;
 import com.gxl.Lighting.rpc.*;
 import com.gxl.Lighting.rpc.param.RegisterCommandParam;
@@ -67,7 +69,7 @@ public class DefaultConsumer implements Consumer{
     private long subscribeTimeout;
 
     /**
-     * 这个对象应该是 完成 订阅后 就设置的 然后 用户直接拿这个对象就好
+     * 这个是 动态代理对象 用户调用后 就会自动发起请求
      */
     private Object service;
 
@@ -214,15 +216,29 @@ public class DefaultConsumer implements Consumer{
     private void getRPCInfo() {
         for(Class clazz : services){
             RPC annotation = (RPC)clazz.getAnnotation(RPC.class);
+            checkRPCAnnotationValid(annotation);
             RPCMeta meta = new RPCMeta();
-            meta.setBalance(annotation.balanceStrategy());
+            meta.setLoadBalance(annotation.balanceStrategy());
             meta.setSerialization(annotation.serialization());
             meta.setTarget(clazz);
             meta.setServiceName(clazz.getSimpleName());
             meta.setTimeout(annotation.timeout());
-            meta.setType(annotation.type());
+            meta.setInvokeType(annotation.invokeType());
             meta.setVip(annotation.vip());
             rpcMeta.put(clazz, meta);
+        }
+    }
+
+    /**
+     * 校验参数合法性
+     * @param annotation
+     */
+    private void checkRPCAnnotationValid(RPC annotation) {
+        if(!SerializationEnum.find(annotation.serialization())){
+            throw new IllegalArgumentException("RPC注解上设置了异常的序列化方式");
+        }
+        if(!InvokeTypeEnum.find(annotation.invokeType())){
+            throw new IllegalArgumentException("RPC注解上设置了异常的通信方式");
         }
     }
 
@@ -311,5 +327,19 @@ public class DefaultConsumer implements Consumer{
         return service;
     }
 
+    public RPCMeta getAnnotationInfo(Class<?> service) {
+        return rpcMeta.get(service);
+    }
 
+    public Class<?>[] getServices() {
+        return services.toArray(new Class<?>[0]);
+    }
+
+    public List<RegisterMeta> getRegisterInfo(String serviceName) {
+        return registerInfo.get(serviceName);
+    }
+
+    public Client getClient() {
+        return client;
+    }
 }

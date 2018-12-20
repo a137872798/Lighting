@@ -60,36 +60,43 @@ public class DefaultServer implements Server{
 
     private static final int DEFAULT_HEARTBEATTIMES = 3;
 
+    private final int port;
+
     public DefaultServer(){
-        this(HeartBeatConfig.getDefaultWriteridletimeseconds(), HeartBeatConfig.getDefaultReaderidletimeseconds()
-        ,HeartBeatConfig.getDefaultAllidletimeseconds());
+        this(-1);
     }
 
-    public DefaultServer(HeartBeatConfig config){
-        this.heartBeatConfig = config;
+    public DefaultServer(int port){
+        this(port, new HeartBeatConfig());
     }
 
-    public DefaultServer(int writerIdleTimeSeconds, int readerIdleTimeSeconds, int allIdleTimeSeconds) {
-        checkParam(writerIdleTimeSeconds, readerIdleTimeSeconds, allIdleTimeSeconds);
+    public DefaultServer(int port,HeartBeatConfig config)
+    {
+        this(port, HeartBeatConfig.getDefaultWriteridletimeseconds(), HeartBeatConfig.getDefaultReaderidletimeseconds()
+                ,HeartBeatConfig.getDefaultAllidletimeseconds());
+    }
+
+    public DefaultServer(int port, int writerIdleTimeSeconds, int readerIdleTimeSeconds, int allIdleTimeSeconds) {
+        checkParam(port, writerIdleTimeSeconds, readerIdleTimeSeconds, allIdleTimeSeconds);
+        this.port = port;
         heartBeatConfig = new HeartBeatConfig(writerIdleTimeSeconds, readerIdleTimeSeconds, allIdleTimeSeconds);
         processorManager = new ProcessorManager();
     }
 
-    private void checkParam(int writerIdleTimeSeconds, int readerIdleTimeSeconds, int allIdleTimeSeconds) {
+    private void checkParam(int port, int writerIdleTimeSeconds, int readerIdleTimeSeconds, int allIdleTimeSeconds) {
+        if(port > 65535 || port < -2){
+            throw new IllegalArgumentException("端口号异常");
+        }
         if (writerIdleTimeSeconds <= 0) {
-            logger.debug("writerIdleTimeNanos 不能小于等于0");
             throw new IllegalArgumentException("writerIdleTimeSeconds 不能小于等于0");
         }
         if (readerIdleTimeSeconds <= 0) {
-            logger.debug("readerIdleTimeNanos 不能小于等于0");
             throw new IllegalArgumentException("readerIdleTimeSeconds 不能小于等于0");
         }
         if (allIdleTimeSeconds <= 0) {
-            logger.debug("allIdleTimeNanos 不能小于等于0");
             throw new IllegalArgumentException("allIdleTimeSeconds 不能小于等于0");
         }
         if (readerIdleTimeSeconds - writerIdleTimeSeconds <= 0) {
-            logger.debug("基于当前框架 心跳检测的实现 一般写的时间间隔必须小于读的时间间隔");
             throw new IllegalArgumentException("基于当前框架 心跳检测的实现 一般写的时间间隔必须小于读的时间间隔");
         }
     }
@@ -169,7 +176,8 @@ public class DefaultServer implements Server{
                                 .addLast(new DispatchHandler(processorManager));
                     }
                 });
-        ChannelFuture future = serverBootstrap.bind();
+        //-1 代表没有默认端口号
+        ChannelFuture future = port != -1 ? serverBootstrap.bind(port) : serverBootstrap.bind();
         future.syncUninterruptibly();
         this.channel = future.channel();
     }

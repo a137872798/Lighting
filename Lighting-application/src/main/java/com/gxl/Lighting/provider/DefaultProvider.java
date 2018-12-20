@@ -38,7 +38,10 @@ public class DefaultProvider implements Provider {
      */
     private Client client;
 
-    //TODO 这里要思考 怎么才能指定端口
+    private static final int DEFAULT_PORT = 8080;
+
+    private static final int VIP_PORT = 8082;
+
     private Server server;
 
     private Server vipServer;
@@ -107,7 +110,7 @@ public class DefaultProvider implements Provider {
         //连接到注册中心
         RegisterCommandParam param = new RegisterCommandParam();
         param.setVersion(Version.version());
-        param.setAddress(AddressUtil.socketAddressToAddress((InetSocketAddress) client.channelTable().get(registryAddress).localAddress()));
+        param.setAddress(AddressUtil.socketAddressToAddress((InetSocketAddress) client.channelTable().get(registryAddress).localAddress(),DEFAULT_PORT));
         param.setServiceName(serviceName);
         Request request = Request.createRequest(RequestEnum.REGISTRY, param);
         Response response = null;
@@ -121,8 +124,8 @@ public class DefaultProvider implements Provider {
 
     private void init() {
         client = new DefaultClient();
-        server = new DefaultServer();
-        vipServer = new DefaultServer();
+        server = new DefaultServer(DEFAULT_PORT);
+        vipServer = new DefaultServer(VIP_PORT);
         server.getProcessorManager().registerProcessor(RequestEnum.INVOKE, new InvokerProcessor());
         vipServer.getProcessorManager().registerProcessor(RequestEnum.INVOKE, new InvokerProcessor());
         timer = new HashedWheelTimer(new NamedThreadFactory("providerRepublish", true), republishInterval, TimeUnit.MILLISECONDS);
@@ -239,7 +242,8 @@ public class DefaultProvider implements Provider {
     private boolean doPublish(String registryAddress) {
         RegisterCommandParam param = new RegisterCommandParam();
         param.setVersion(Version.version());
-        param.setAddress(AddressUtil.socketAddressToAddress((InetSocketAddress) client.channelTable().get(registryAddress).localAddress()));
+        //注册一律使用 普通服务器的 端口
+        param.setAddress(AddressUtil.socketAddressToAddress((InetSocketAddress) client.channelTable().get(registryAddress).localAddress(),DEFAULT_PORT));
         param.setServiceName(serviceName);
         Request request = Request.createRequest(RequestEnum.REGISTRY, param);
         Response response = null;
@@ -265,7 +269,7 @@ public class DefaultProvider implements Provider {
         UnRegisterCommandParam param = new UnRegisterCommandParam();
         param.setVersion(Version.version());
         param.setServiceName(serviceName);
-        param.setAddress(AddressUtil.socketAddressToAddress((InetSocketAddress) client.channelTable().get(registryAddress).localAddress()));
+        param.setAddress(AddressUtil.socketAddressToAddress((InetSocketAddress) client.channelTable().get(registryAddress).localAddress(), DEFAULT_PORT));
         Request request = Request.createRequest(RequestEnum.UNREGISTRY, param);
         Response response = null;
         try {

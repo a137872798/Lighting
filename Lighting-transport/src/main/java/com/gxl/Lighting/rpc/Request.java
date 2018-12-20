@@ -34,6 +34,11 @@ public class Request {
      */
     private String serialization;
 
+    /**
+     * 请求方式 对端需要依靠这个标识来确定是否需要返回结果
+     */
+    private String invokeType;
+
     private long id;
 
     private Request(int command){
@@ -88,8 +93,22 @@ public class Request {
         return id;
     }
 
+    public String getInvokeType() {
+        return invokeType;
+    }
+
+    public void setInvokeType(String invokeType) {
+        this.invokeType = invokeType;
+    }
+
     @Override
     public String toString() {
-        return "Request{" + "param=" + param + ", command=" + command + ", serialization='" + serialization + '\'' + ", id=" + id  + '\'' + '}';
+        return "Request{" +
+                "param=" + param +
+                ", command=" + command +
+                ", serialization='" + serialization + '\'' +
+                ", invokeType='" + invokeType + '\'' +
+                ", id=" + id +
+                '}';
     }
 }

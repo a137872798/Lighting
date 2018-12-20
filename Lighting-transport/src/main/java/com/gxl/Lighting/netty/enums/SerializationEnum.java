@@ -36,10 +36,19 @@ public enum SerializationEnum {
 
     public static String getValue(byte b){
         for(SerializationEnum temp : SerializationEnum.values()){
-            if(temp.getFlag() == b){
+            if((temp.getFlag() & b ) == 1){
                 return temp.getSerialization();
             }
         }
         return null;
+    }
+
+    public static boolean find(String name){
+        for(SerializationEnum temp : SerializationEnum.values()){
+            if(temp.getSerialization().equalsIgnoreCase(name)){
+                return true;
+            }
+        }
+        return false;
     }
 }
