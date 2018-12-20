@@ -2,7 +2,7 @@ package com.gxl.Lighting.rpc;
 
 import java.lang.annotation.*;
 
-@Target(ElementType.METHOD)
+@Target(ElementType.TYPE)
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 public @interface RPC {

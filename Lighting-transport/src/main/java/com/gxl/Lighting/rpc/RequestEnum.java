@@ -16,7 +16,7 @@ public enum RequestEnum {
     /**
      * 订阅注册中心上的某个服务
      */
-    SUBSCRIBUTE,
+    SUBSCRIBE,
     /**
      * 取消订阅
      */

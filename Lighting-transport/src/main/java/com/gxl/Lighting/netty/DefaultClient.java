@@ -9,6 +9,7 @@ import com.gxl.Lighting.netty.codec.LightingEncoder;
 import com.gxl.Lighting.netty.heartbeat.HeartBeatHandler;
 import com.gxl.Lighting.rpc.*;
 import com.gxl.Lighting.rpc.processor.ProcessorManager;
+import com.gxl.Lighting.util.StringUtil;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
@@ -26,8 +27,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DefaultClient implements Client {
 
@@ -56,12 +56,13 @@ public class DefaultClient implements Client {
     /**
      * 是否被关闭
      */
-    private volatile boolean closed;
+    private AtomicBoolean closed = new AtomicBoolean(false);
 
     /**
-     * 作为 提供者 管理关联 注册中心的 所有channel
+     * 管理该 client 连接到的所有服务器
      */
-    private final Map<String, Channel> registryChannel = new HashMap<String, Channel>();
+    private final Map<String, Channel> channelTable = new HashMap<String, Channel>();
+
 
     /**
      * 维护 同步请求的结果对象  并配合后台线程清理 过时的 response 代表连接超时
@@ -82,7 +83,7 @@ public class DefaultClient implements Client {
                     response.setErrorMsg("请求超时");
                     response.setCause(new RemotingTimeoutException("请求超时"));
                     Callback callback = entry.getValue().getCallback();
-                    callback.callback(response);
+                    callback.callback(entry.getValue());
                 } else {
                     entry.getValue().setResponse(null);
                 }
@@ -93,10 +94,6 @@ public class DefaultClient implements Client {
         }
     };
 
-    /**
-     * 维护  到达服务器的长连接
-     */
-    private Channel channel;
     /**
      * 使用cpu2倍的线程数 并使用netty 中可以生成独占线程的 线程工厂
      */
@@ -150,13 +147,13 @@ public class DefaultClient implements Client {
                     pipeline.addLast("decoder", new LightingDecoder())
                             .addLast("encoder", new LightingEncoder())
                             .addLast(new HeartBeatHandler(config.getReaderIdleTimeSeconds(), config.getWriterIdleTimeSeconds(), config.getAllIdleTimeSeconds(), true))
-                            .addLast(new ConnectionHandler(inetSocketAddress, bootstrap, timer))
+                            .addLast(new ConnectionHandler(inetSocketAddress, DefaultClient.this, timer))
                             .addLast(new DispatchHandler(processorManager));
                 }
             });
             ChannelFuture future = bootstrap.connect();
             if (future.awaitUninterruptibly().isSuccess()) {
-                registryChannel.put(address + ":" + String.valueOf(port), future.channel());
+                channelTable.put(address + ":" + String.valueOf(port), future.channel());
             } else {
                 logger.warn("连接到{}失败", address);
             }
@@ -170,12 +167,16 @@ public class DefaultClient implements Client {
      * @param callback
      * @param timeout
      */
-    public void invokeASync(String address, final Request request, Callback callback, long timeout) {
-        final Channel channel = registryChannel.get(address);
+    public void invokeAsync(String address, final Request request, Callback callback, long timeout) {
+        Channel channel = channelTable.get(address);
         if (channel == null) {
             logger.warn("没有找到{}对应的通道对象", address);
+            String[] addresses = StringUtil.split(address, ":");
+            connect(addresses[0], Integer.valueOf(addresses[1]));
+            channel = channelTable.get(address);
         }
         final ResponseFuture future = new ResponseFuture(request.getId(),callback,timeout);
+        future.setRemoteAddress(address);
         responseTable.put(request.getId(), future);
         channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
             public void operationComplete(ChannelFuture channelFuture) throws Exception {
@@ -200,7 +201,7 @@ public class DefaultClient implements Client {
             response.setSuccess(false);
             response.setErrorMsg("请求超时");
             response.setCause(new RemotingTimeoutException("请求超时"));
-            future.getCallback().callback(response);
+            future.getCallback().callback(future);
         }
     }
 
@@ -215,11 +216,15 @@ public class DefaultClient implements Client {
     public Response invokeSync(final String address, final Request request, long timeout) throws
             RemotingSendException, RemotingTimeoutException{
         long startTime = System.currentTimeMillis();
-        final Channel channel = registryChannel.get(address);
+        Channel channel = channelTable.get(address);
         if (channel == null) {
-            logger.warn("没有找到{}对应的通道对象", address);
+            logger.warn("没有找到{}对应的通道对象 现在开始创建", address);
+            String[] addresses = StringUtil.split(address, ":");
+            connect(addresses[0], Integer.valueOf(addresses[1]));
+            channel = channelTable.get(address);
         }
         final ResponseFuture future = new ResponseFuture(request.getId(), null, timeout);
+        future.setRemoteAddress(address);
 
         responseTable.put(request.getId(), future);
         channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
@@ -258,7 +263,7 @@ public class DefaultClient implements Client {
      * @param request
      */
     public void oneWay(String address, Request request) {
-        final Channel channel = registryChannel.get(address);
+        final Channel channel = channelTable.get(address);
         channel.writeAndFlush(request);
     }
 
@@ -274,38 +279,12 @@ public class DefaultClient implements Client {
         cleanTimer.newTimeout(cleanTask, 3, TimeUnit.SECONDS);
     }
 
-
-    public boolean isConnected() {
-        Channel channel = getChannel();
-        if (channel == null) {
-            return false;
-        }
-        return channel.isActive();
-    }
-
-    public void oneWay(Request request) {
-
-    }
-
-    public boolean isClosed() {
-        return closed;
-    }
-
-    public void setClosed(boolean closed) {
-        this.closed = closed;
-    }
-
-
-    public void subscribute(Listener listener) {
-
-    }
-
     public int getConnectionTimeout() {
         return connectionTimeout;
     }
 
     /**
-     * 太小的 值 不让设置
+     * 太小的值不让设置
      *
      * @param timeout
      */
@@ -321,10 +300,12 @@ public class DefaultClient implements Client {
     }
 
     public void shutdownGracefully() {
-        timer.stop();
-        cleanTimer.stop();
-        workerGroup.shutdownGracefully();
-        logger.info("关闭客户端");
+        if(closed.compareAndSet(false, true)) {
+            timer.stop();
+            cleanTimer.stop();
+            workerGroup.shutdownGracefully();
+            logger.info("关闭客户端");
+        }
     }
 
     public ProcessorManager getProcessorManager() {
@@ -351,11 +332,12 @@ public class DefaultClient implements Client {
         this.config = config;
     }
 
-    public Channel getChannel() {
-        return channel;
+
+    public Map<String, Channel> channelTable() {
+        return channelTable;
     }
 
-    public void setChannel(Channel channel) {
-        this.channel = channel;
+    public boolean isShutdown(){
+        return closed.get();
     }
 }

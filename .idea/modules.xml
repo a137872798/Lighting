@@ -2,9 +2,15 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/Lighting.iml" filepath="$PROJECT_DIR$/Lighting.iml" />
       <module fileurl="file://$PROJECT_DIR$/Lighting-application/Lighting-application.iml" filepath="$PROJECT_DIR$/Lighting-application/Lighting-application.iml" />
       <module fileurl="file://$PROJECT_DIR$/Lighting-cluster/Lighting-cluster.iml" filepath="$PROJECT_DIR$/Lighting-cluster/Lighting-cluster.iml" />
       <module fileurl="file://$PROJECT_DIR$/Lighting-common/Lighting-common.iml" filepath="$PROJECT_DIR$/Lighting-common/Lighting-common.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Lighting-logging/Lighting-logging.iml" filepath="$PROJECT_DIR$/Lighting-logging/Lighting-logging.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Lighting-monitor/Lighting-monitor.iml" filepath="$PROJECT_DIR$/Lighting-monitor/Lighting-monitor.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Lighting-proxy/Lighting-proxy.iml" filepath="$PROJECT_DIR$/Lighting-proxy/Lighting-proxy.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Lighting-registry/Lighting-registry.iml" filepath="$PROJECT_DIR$/Lighting-registry/Lighting-registry.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Lighting-transport/Lighting-transport.iml" filepath="$PROJECT_DIR$/Lighting-transport/Lighting-transport.iml" />
     </modules>
   </component>
 </project>

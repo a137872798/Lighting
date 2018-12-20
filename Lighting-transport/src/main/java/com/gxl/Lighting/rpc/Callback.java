@@ -5,5 +5,5 @@ package com.gxl.Lighting.rpc;
  */
 public interface Callback {
 
-    void callback(Response response);
+    void callback(ResponseFuture future);
 }

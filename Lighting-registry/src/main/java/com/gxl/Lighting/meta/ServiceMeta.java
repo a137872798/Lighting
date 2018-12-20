@@ -7,6 +7,11 @@ public class ServiceMeta {
 
     private String serviceName;
 
+    /**
+     * 该服务下 方法级别的 参数
+     */
+    private MethodMeta methodMeta;
+
     private int version;
 
     public String getServiceName() {

@@ -34,6 +34,11 @@ public class ResponseFuture {
     private long id;
 
     /**
+     * 对端地址 用来发起 重连
+     */
+    private String remoteAddress;
+
+    /**
      * 是否成功发送到对端
      */
     private boolean sendSuccess;
@@ -103,6 +108,14 @@ public class ResponseFuture {
         this.cause = cause;
     }
 
+    public String getRemoteAddress() {
+        return remoteAddress;
+    }
+
+    public void setRemoteAddress(String remoteAddress) {
+        this.remoteAddress = remoteAddress;
+    }
+
     /**
      * 等待 响应  这里出现异常 或者设置了 response 都会 唤醒
      * @param timeout
@@ -115,6 +128,7 @@ public class ResponseFuture {
         }
         return response;
     }
+
 
 
 }

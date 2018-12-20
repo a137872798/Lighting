@@ -3,7 +3,7 @@ package com.gxl.Lighting.rpc.param;
 import com.gxl.Lighting.NotifyListener;
 import com.gxl.Lighting.rpc.CommandParam;
 
-public class SubscributeCommandParam extends CommandParam {
+public class SubscribeCommandParam extends CommandParam {
 
     /**
      * 服务名  可以 ， 拆分

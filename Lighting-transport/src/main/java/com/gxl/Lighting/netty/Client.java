@@ -4,6 +4,8 @@ import com.gxl.Lighting.meta.SubscributeMeta;
 import com.gxl.Lighting.rpc.*;
 import io.netty.channel.Channel;
 
+import java.util.Map;
+
 /**
  * RPC 通信的客户端接口
  */
@@ -29,7 +31,7 @@ public interface Client extends Remoting{
      * @param request
      * @param callback
      */
-    void invokeASync(String address, Request request, Callback callback, long timeout);
+    void invokeAsync(String address, Request request, Callback callback, long timeout);
 
     /**
      * 向注册中心 订阅服务
@@ -41,6 +43,8 @@ public interface Client extends Remoting{
 
     void setConnectionTimeout(int timeout);
 
-    boolean isConnected();
+    boolean isShutdown();
+
+    Map<String, Channel> channelTable();
 
 }

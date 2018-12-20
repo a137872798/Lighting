@@ -88,7 +88,7 @@ public class ProcessorManager implements Processor {
         if (future != null) {
             responseTable.remove(response.getId());
             if (future.getCallback() != null) {
-                future.getCallback().callback(response);
+                future.getCallback().callback(future);
             } else {
                 future.setResponse(response);
             }

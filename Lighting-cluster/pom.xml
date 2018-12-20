@@ -10,6 +10,18 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>Lighting-cluster</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>com.gxl.lighting</groupId>
+            <artifactId>Lighting-registry</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.gxl.lighting</groupId>
+            <artifactId>Lighting-transport</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
 
 
 </project>

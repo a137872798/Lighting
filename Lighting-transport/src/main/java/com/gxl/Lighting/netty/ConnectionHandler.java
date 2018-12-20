@@ -28,23 +28,21 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter implements T
      */
     private final SocketAddress address;
 
-    private final Bootstrap bootstrap;
-
     private final Timer timer;
 
     /**
-     * 默认 一开始 是 关闭的 首次 active 时 就修改成true
+     * 通过判断client 是否终止 确定是否要继续重连
      */
-    private AtomicBoolean start = new AtomicBoolean(false);
+    private final DefaultClient client;
 
     /**
      * 重试次数
      */
     private int attempts;
 
-    public ConnectionHandler(SocketAddress address, Bootstrap bootstrap, Timer timer) {
+    public ConnectionHandler(SocketAddress address, DefaultClient client, Timer timer) {
         this.address = address;
-        this.bootstrap = bootstrap;
+        this.client = client;
         this.timer = timer;
     }
 
@@ -57,12 +55,7 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter implements T
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         //通道重新激活时  重置 重试次数
-        if (start.compareAndSet(false, true)) {
-            if (this.attempts != 0) {
-                logger.info("连接到远程地址" + address + "成功，尝试了" + attempts + "次");
-            }
-            this.attempts = 0;
-        }
+        this.attempts = 0;
         super.channelActive(ctx);
     }
 
@@ -74,28 +67,27 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter implements T
      */
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        if (start.compareAndSet(true, false)) {
+        if (!client.isShutdown()) {
             if (attempts < 5) {
                 int timeout = attempts << 2;
                 timer.newTimeout(this, timeout, TimeUnit.MILLISECONDS);
+                logger.warn("与" + ctx.channel() + "断开连接， 地址是" + address + "开始重连");
             }
-
-            logger.warn("与" + ctx.channel() + "断开连接， 地址是" + address + "开始重连");
         }
         super.channelInactive(ctx);
     }
 
 
     public void run(final Timeout timeout) throws Exception {
-        if (!start.get()) {
-            synchronized (bootstrap) {
-                final ChannelFuture future = bootstrap.connect(address);
+        if(!client.isShutdown()) {
+            synchronized (client.getBootstrap()) {
+                final ChannelFuture future = client.getBootstrap().connect(address);
 
                 future.addListener(new ChannelFutureListener() {
                     public void operationComplete(ChannelFuture channelFuture) throws Exception {
                         boolean succeed = channelFuture.isSuccess();
                         logger.warn("重连到{}成功{}", address, succeed ? true : false);
-                        if(!succeed){
+                        if (!succeed) {
                             channelFuture.channel().pipeline().fireChannelInactive();
                         }
                     }

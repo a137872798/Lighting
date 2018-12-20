@@ -9,12 +9,16 @@ import com.gxl.Lighting.rpc.RemotingTimeoutException;
  */
 public interface Provider extends Application {
 
-    void publishService(Object o);
+    void addPublishService(Object o);
 
-    void publishServices(Object... o);
+    void addPublishServices(Object... o);
 
-    boolean unRegister();
+    void publish();
 
+    boolean unPublish(String registryAddress, String serviceName);
 
+    void removePublishService(Object o);
+
+    void removePublishServices(Object... o);
 }
 

@@ -9,8 +9,6 @@ public interface Application {
      */
     void reset();
 
-    void start();
-
     String[] getRegistryAddresses();
 
     void setRegistryAddresses(String[] address);

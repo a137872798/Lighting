@@ -36,6 +36,12 @@ public class ConcurrentHashSet<E> extends AbstractSet<E> implements Set<E> {
         return map.isEmpty();
     }
 
+    public void addAll(E[] array) {
+        for(E e : array) {
+            map.put(e, EMPTY);
+        }
+    }
+
     @Override
     public boolean contains(Object o) {
         return map.containsKey(o);
@@ -44,6 +50,12 @@ public class ConcurrentHashSet<E> extends AbstractSet<E> implements Set<E> {
     @Override
     public boolean add(E e) {
         return map.put(e, EMPTY) == null;
+    }
+
+    public void removeAll(E[] array){
+        for(E e : array) {
+            map.remove(e);
+        }
     }
 
     @Override
