@@ -11,19 +11,19 @@ public class Invoker {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(Invoker.class);
 
-    private List<Object> objs;
+    private List<Class<?>> objs;
 
-    public Invoker(List<Object> objs) {
+    public Invoker(List<Class<?>> objs) {
         this.objs = objs;
     }
 
     public Object invoke(InvokerCommandParam param) {
         String interfaceName = param.getServiceName();
-        for (Object o : objs) {
+        for (Class<?> o : objs) {
             //暴露的服务是以对象的 接口为单位
-            if (o.getClass().getSuperclass().getSimpleName().equals(interfaceName)) {
+            if (o.getSuperclass().getSimpleName().equals(interfaceName)) {
                 try {
-                    Method m = o.getClass().getSuperclass().getMethod(param.getMethodName(), param.getParamTypes());
+                    Method m = o.getSuperclass().getMethod(param.getMethodName(), param.getParamTypes());
                     Object result = m.invoke(o, param.getParams());
                     return result;
                 }catch (Exception e){

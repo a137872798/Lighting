@@ -17,7 +17,15 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="Lighting" target="1.5" />
+      <module name="Lighting-application" target="1.5" />
+      <module name="Lighting-cluster" target="1.5" />
       <module name="Lighting-common" target="1.5" />
+      <module name="Lighting-logging" target="1.5" />
+      <module name="Lighting-monitor" target="1.5" />
+      <module name="Lighting-proxy" target="1.5" />
+      <module name="Lighting-registry" target="1.5" />
+      <module name="Lighting-transport" target="1.5" />
     </bytecodeTargetLevel>
   </component>
 </project>

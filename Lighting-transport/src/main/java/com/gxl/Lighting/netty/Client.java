@@ -1,6 +1,6 @@
 package com.gxl.Lighting.netty;
 
-import com.gxl.Lighting.meta.SubscributeMeta;
+import com.gxl.Lighting.meta.SubscribeMeta;
 import com.gxl.Lighting.rpc.*;
 import io.netty.channel.Channel;
 
@@ -32,12 +32,6 @@ public interface Client extends Remoting{
      * @param callback
      */
     void invokeAsync(String address, Request request, Callback callback, long timeout);
-
-    /**
-     * 向注册中心 订阅服务
-     * @param listener
-     */
-    void subscribute(SubscributeMeta meta, Listener listener);
 
     int getConnectionTimeout();
 

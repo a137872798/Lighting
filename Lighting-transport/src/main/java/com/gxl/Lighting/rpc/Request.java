@@ -41,24 +41,28 @@ public class Request {
 
     private long id;
 
-    private Request(int command){
-        this(command, null);
-    }
-
-    private Request(int command, CommandParam param){
-        long tempId = ID_GENERITOR.incrementAndGet();
-        //如果出现越界  重置id
-        if(tempId == Long.MIN_VALUE){
-            logger.debug("request id 出现了 Long.MIN_VALUE 现在被重置为0");
-            tempId = 0;
+    private Request(int command, CommandParam param, int id) {
+        if (id != -1) {
+            this.id = id;
+        } else {
+            long tempId = ID_GENERITOR.incrementAndGet();
+            //如果出现越界  重置id
+            if (tempId == Long.MIN_VALUE) {
+                logger.debug("request id 出现了 Long.MIN_VALUE 现在被重置为0");
+                tempId = 0;
+                this.id = tempId;
+            }
+            this.command = command;
+            this.param = param;
         }
-        this.id = tempId;
-        this.command = command;
-        this.param = param;
     }
 
     public static Request createRequest(RequestEnum type, CommandParam param){
-        return new Request(type.ordinal(), param);
+        return createRequest(type, param, -1);
+    }
+
+    public static Request createRequest(RequestEnum type, CommandParam param, int id) {
+        return new Request(type.ordinal(), param, id);
     }
 
     public CommandParam getParam() {
@@ -103,12 +107,8 @@ public class Request {
 
     @Override
     public String toString() {
-        return "Request{" +
-                "param=" + param +
-                ", command=" + command +
-                ", serialization='" + serialization + '\'' +
-                ", invokeType='" + invokeType + '\'' +
-                ", id=" + id +
-                '}';
+        return "Request{" + "param=" + param + ", command=" + command + ", serialization='" + serialization + '\'' + ", invokeType='" + invokeType + '\'' + ", id=" + id + '}';
     }
+
+
 }

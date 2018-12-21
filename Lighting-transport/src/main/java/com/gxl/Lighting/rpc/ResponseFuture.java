@@ -55,6 +55,11 @@ public class ResponseFuture {
      */
     private Throwable cause;
 
+    /**
+     * 该 future对象的创建时间
+     */
+    private final long beginTime = System.currentTimeMillis();
+
     public ResponseFuture(long id, Callback callback,long timeout){
         this.id = id;
         this.callback = callback;
@@ -131,6 +136,15 @@ public class ResponseFuture {
         return response;
     }
 
+    public long getTimeout() {
+        return timeout;
+    }
 
+    public void setTimeout(long timeout) {
+        this.timeout = timeout;
+    }
 
+    public long getBeginTime() {
+        return beginTime;
+    }
 }

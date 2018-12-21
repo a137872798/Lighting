@@ -4,7 +4,7 @@ import com.gxl.Lighting.rpc.CommandParam;
 
 import java.util.Arrays;
 
-public class InvokerCommandParam extends CommandParam {
+public class InvokerCommandParam implements CommandParam {
 
     /**
      * 需要知道调用的是哪个类的服务实现

@@ -3,9 +3,9 @@ package com.gxl.Lighting.netty;
 import com.gxl.Lighting.NamedThreadFactory;
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
-import com.gxl.Lighting.meta.SubscributeMeta;
 import com.gxl.Lighting.netty.codec.LightingDecoder;
 import com.gxl.Lighting.netty.codec.LightingEncoder;
+import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
 import com.gxl.Lighting.netty.heartbeat.HeartBeatHandler;
 import com.gxl.Lighting.rpc.*;
 import com.gxl.Lighting.rpc.processor.ProcessorManager;
@@ -76,21 +76,23 @@ public class DefaultClient implements Client {
         public void run(Timeout timeout){
 
             for(Map.Entry<Long, ResponseFuture> entry : responseTable.entrySet()){
-                if(entry.getValue().getCallback() != null){
-                    //触发 异步超时的 异常
-                    Response response = new Response(entry.getKey());
-                    response.setSuccess(false);
-                    response.setErrorMsg("请求超时");
-                    response.setCause(new RemotingTimeoutException("请求超时"));
-                    Callback callback = entry.getValue().getCallback();
-                    callback.callback(entry.getValue());
-                } else {
-                    entry.getValue().setResponse(null);
+                if(entry.getValue().getTimeout() + entry.getValue().getBeginTime() <= System.currentTimeMillis()){
+                    if(entry.getValue().getCallback() != null){
+                        //触发 异步超时的 异常
+                        Response response = new Response(entry.getKey());
+                        response.setSuccess(false);
+                        response.setErrorMsg("请求超时");
+                        response.setCause(new RemotingTimeoutException("请求超时"));
+                        Callback callback = entry.getValue().getCallback();
+                        callback.callback(entry.getValue());
+                    } else {
+                        entry.getValue().setResponse(null);
+                    }
+                    responseTable.remove(entry.getKey());
                 }
-                responseTable.remove(entry.getKey());
             }
             //设置下次任务
-            timer.newTimeout(this, 3, TimeUnit.SECONDS);
+            timer.newTimeout(this, 100, TimeUnit.MILLISECONDS);
         }
     };
 
@@ -247,7 +249,7 @@ public class DefaultClient implements Client {
         //超时时 后台线程也会往这里设置 空结果
         long currentTime = System.currentTimeMillis();
         timeout = timeout - currentTime + startTime;
-        Response response = future.waitResponseUnInterrupt(timeout, TimeUnit.SECONDS);
+        Response response = future.waitResponseUnInterrupt(timeout, TimeUnit.MILLISECONDS);
         responseTable.remove(future.getId());
         if(response == null){
             if(future.isSendSuccess()){
@@ -272,11 +274,6 @@ public class DefaultClient implements Client {
         }
         channel.writeAndFlush(request);
     }
-
-    public void subscribute(SubscributeMeta meta, Listener listener) {
-
-    }
-
 
     private void init() {
         bootstrap = new Bootstrap();

@@ -1,24 +1,20 @@
 package com.gxl.Lighting.rpc.param;
 
 import com.gxl.Lighting.NotifyListener;
+import com.gxl.Lighting.meta.SubscribeMeta;
 import com.gxl.Lighting.rpc.CommandParam;
 
-public class SubscribeCommandParam extends CommandParam {
+public class SubscribeCommandParam implements CommandParam {
 
     /**
      * 服务名  可以 ， 拆分
      */
     private String serviceName;
 
-    private int version;
+    private SubscribeMeta meta;
 
     /**
-     * 订阅者的地址
-     */
-    private String address;
-
-    /**
-     * 当订阅的该服务
+     * 回调
      */
     private NotifyListener listener;
 
@@ -30,20 +26,12 @@ public class SubscribeCommandParam extends CommandParam {
         this.serviceName = serviceName;
     }
 
-    public int getVersion() {
-        return version;
+    public SubscribeMeta getMeta() {
+        return meta;
     }
 
-    public void setVersion(int version) {
-        this.version = version;
-    }
-
-    public String getAddress() {
-        return address;
-    }
-
-    public void setAddress(String address) {
-        this.address = address;
+    public void setMeta(SubscribeMeta meta) {
+        this.meta = meta;
     }
 
     public NotifyListener getListener() {

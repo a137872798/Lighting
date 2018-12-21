@@ -25,6 +25,6 @@ public class JsonSerialization implements Serialization{
     public Object deserialize(InputStream in, int bodySize) throws IOException{
         byte[] body = new byte[bodySize];
         in.read(body);
-        return JSON.parse(new String(body));
+        return JSON.parse(new String(body, "UTF-8"));
     }
 }

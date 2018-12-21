@@ -22,7 +22,7 @@ public class RPCInvocationHanlder implements InvocationHandler{
         param.setParams(args);
 
         //开始远程通信
-        rpcInvocation.invoke(param);
-        return null;
+
+        return rpcInvocation.invoke(param);
     }
 }

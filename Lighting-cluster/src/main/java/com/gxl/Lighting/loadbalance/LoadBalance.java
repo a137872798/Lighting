@@ -6,7 +6,7 @@ import com.gxl.Lighting.meta.RegisterMeta;
 import java.util.List;
 
 /**
- * 均衡负载接口
+ * 均衡负载接口  这里默认使用2种很简单的 方法主要还是为了跑通流程
  */
 public interface LoadBalance {
 

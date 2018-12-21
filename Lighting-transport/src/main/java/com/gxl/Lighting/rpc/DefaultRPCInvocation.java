@@ -1,13 +1,11 @@
 package com.gxl.Lighting.rpc;
 
-import com.gxl.Lighting.consumer.Consumer;
-import com.gxl.Lighting.consumer.RPCMeta;
+import com.gxl.Lighting.consumer.DefaultConsumer;
 import com.gxl.Lighting.loadbalance.LoadBalance;
 import com.gxl.Lighting.loadbalance.RoundRobinLoadBalance;
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
 import com.gxl.Lighting.meta.RegisterMeta;
-import com.gxl.Lighting.netty.Client;
 import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
 import com.gxl.Lighting.rpc.param.InvokerCommandParam;
 import com.gxl.Lighting.util.StringUtil;
@@ -19,15 +17,26 @@ public class DefaultRPCInvocation implements RPCInvocation{
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(DefaultRPCInvocation.class);
 
+    private final Callback invokeCallBack = new Callback() {
+        //有可能用户短时间内调用多次 异步请求 触发回调后就可能出现并发问题
+        public synchronized void callback(ResponseFuture future) {
+            Response response = future.getResponse();
+            if(!future.getResponse().isSuccess()){
+                logger.warn("exception{}, msg{}", response.getCause(), response.getErrorMsg());
+            }
+            consumer.setService(response.create());
+        }
+    };
+
     /**
      * 内部通过 远程通信
      * @return
      */
-    private Consumer consumer;
+    private DefaultConsumer consumer;
 
     private LoadBalance balance;
 
-    DefaultRPCInvocation(Consumer consumer){
+    public DefaultRPCInvocation(DefaultConsumer consumer){
         this.consumer = consumer;
     }
 
@@ -36,7 +45,7 @@ public class DefaultRPCInvocation implements RPCInvocation{
      * @param param
      * @return
      */
-    public Response invoke(InvokerCommandParam param) {
+    public Object invoke(InvokerCommandParam param) {
         RPCMeta meta = findServiceNameByMethodInfo(param);
         String serviceName = meta.getServiceName();
         long invokeTimeout = meta.getTimeout();
@@ -55,6 +64,9 @@ public class DefaultRPCInvocation implements RPCInvocation{
         Request request = Request.createRequest(RequestEnum.INVOKE, param);
         request.setSerialization(meta.getSerialization());
         request.setInvokeType(invokeType);
+        //这步的数据是由订阅逻辑生成的
+        //TODO 根据订阅到的结果是 1 还是 多个 生成 集群invocation or 单个 invocation
+        //TODO 这里需要将 调用失败的 服务器记录下来在下次 负载中跳过这个 访问不到的 服务器
         List<RegisterMeta> list = consumer.getRegisterInfo(serviceName);
         RegisterMeta providerInfo = balance.select(list);
         String providerAddress = providerInfo.getAddress();
@@ -63,12 +75,18 @@ public class DefaultRPCInvocation implements RPCInvocation{
             providerAddress = converVip(providerAddress);
         }
         if(invokeType.equals(InvokeTypeEnum.ASYNC.getInvokeType())){
-            //TODO  这里需要一个 能生成代理对象的 回调函数
-            consumer.getClient().invokeAsync();
+            consumer.getClient().invokeAsync(providerAddress, request, invokeCallBack, invokeTimeout);
+            //异步调用 直接返回null 结果到达之后 会通过回调 设置结果
+            return null;
         }
+
+        Response response = null;
         if(invokeType.equals(InvokeTypeEnum.SYNC.getInvokeType())){
             try {
-                consumer.getClient().invokeSync(providerAddress, request, invokeTimeout);
+                response = consumer.getClient().invokeSync(providerAddress, request, invokeTimeout);
+                if(!response.isSuccess()){
+                    logger.warn("exception{}, msg{}", response.getCause(), response.getErrorMsg());
+                }
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } catch (RemotingSendException e) {
@@ -78,7 +96,7 @@ public class DefaultRPCInvocation implements RPCInvocation{
             }
         }
 
-        return null;
+        return response.create();
     }
 
     private String converVip(String providerAddress){
@@ -111,5 +129,7 @@ public class DefaultRPCInvocation implements RPCInvocation{
                 }
             }
         }
+        logger.warn("在目标服务上没有找到对应的RPCMeta信息");
+        return null;
     }
 }

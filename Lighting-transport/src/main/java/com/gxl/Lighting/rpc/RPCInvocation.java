@@ -7,5 +7,5 @@ import com.gxl.Lighting.rpc.param.InvokerCommandParam;
  */
 public interface RPCInvocation {
 
-    Response invoke(InvokerCommandParam param);
+    Object invoke(InvokerCommandParam param);
 }

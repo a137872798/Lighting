@@ -1,32 +1,31 @@
 package com.gxl.Lighting.consumer;
 
-import com.gxl.Lighting.ConcurrentHashSet;
+import com.gxl.Lighting.NamedThreadFactory;
 import com.gxl.Lighting.NotifyListener;
-import com.gxl.Lighting.Version;
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
 import com.gxl.Lighting.meta.RegisterMeta;
 import com.gxl.Lighting.meta.ServiceMeta;
-import com.gxl.Lighting.meta.SubscributeMeta;
+import com.gxl.Lighting.meta.SubscribeMeta;
 import com.gxl.Lighting.netty.Client;
 import com.gxl.Lighting.netty.DefaultClient;
 import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
 import com.gxl.Lighting.netty.enums.SerializationEnum;
 import com.gxl.Lighting.proxy.ProxyFactory;
 import com.gxl.Lighting.rpc.*;
-import com.gxl.Lighting.rpc.param.RegisterCommandParam;
 import com.gxl.Lighting.rpc.param.SubscribeCommandParam;
-import com.gxl.Lighting.util.AddressUtil;
+import com.gxl.Lighting.rpc.param.UnSubscribeCommandParam;
 import com.gxl.Lighting.util.StringUtil;
+import io.netty.util.HashedWheelTimer;
+import io.netty.util.Timeout;
+import io.netty.util.Timer;
+import io.netty.util.TimerTask;
 
-import java.net.InetSocketAddress;
-import java.net.Proxy;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DefaultConsumer implements Consumer{
@@ -36,7 +35,7 @@ public class DefaultConsumer implements Consumer{
     /**
      * 注意 这些接口 上是有 注解信息的  需要通过这个  来 获取
      */
-    private ConcurrentHashSet<Class<?>> services = new ConcurrentHashSet<Class<?>>();
+    private List<Class<?>> services = new CopyOnWriteArrayList<Class<?>>();
 
     /**
      * 维护 服务类的 rpc元数据
@@ -56,17 +55,22 @@ public class DefaultConsumer implements Consumer{
 
     private AtomicBoolean start = new AtomicBoolean(false);
 
-    private ProxyFactory proxyFactory = new ProxyFactory();
-
     /**
      * 关于 集群调用 发送请求包 处理返回结果的逻辑 全部由这个对象完成
      */
     private RPCInvocation rpcInvocation;
 
     /**
+     * 订阅的元数据
+     */
+    private SubscribeMeta meta;
+
+    /**
      * 订阅的超时时间
      */
     private long subscribeTimeout;
+
+    private static final long DEFAULT_SUBSCRIBETIMEOUT = 1000;
 
     /**
      * 这个是 动态代理对象 用户调用后 就会自动发起请求
@@ -77,35 +81,85 @@ public class DefaultConsumer implements Consumer{
 
     private String monitorAddress;
 
-    private NotifyListener DEFAULT_NOTIFYLISTENER = new NotifyListener() {
-        public void notify(List<RegisterMeta> services) {
-            //这里获得的是全量数据 然后需要按照服务名 进行分类
-            for(RegisterMeta meta : services){
-                for(ServiceMeta serviceMeta : meta.getServiceMeta()){
-                    if(registerInfo.get(serviceMeta.getServiceName()) == null) {
+    /**
+     * 重连到注册中心的 时间间隔
+     */
+    private long republishInterval = 1000;
 
-                        CopyOnWriteArrayList list = new CopyOnWriteArrayList();
-                        CopyOnWriteArrayList old = registerInfo.putIfAbsent(serviceMeta.getServiceName(), list);
-                        if(old != null){
-                            list = old;
-                        }
+    /**
+     * 可以, 拼接
+     */
+    private String serviceName;
 
-                    } else {
+    /**
+     * 后台订阅到注册中心的定时器
+     */
+    private Timer timer = new HashedWheelTimer(new NamedThreadFactory("consumerReconnect.thread",true));
 
-                    }
+    private BlockingQueue<String> failRegistryAddress = new LinkedBlockingQueue<String>();
+
+    private TimerTask task = new TimerTask() {
+        public void run(Timeout timeout) throws Exception {
+            String registryAddress = failRegistryAddress.take();
+            if(start.get()) {
+                doSubscributeAysnc(registryAddress);
+                timer.newTimeout(this, republishInterval, TimeUnit.MILLISECONDS);
+            }
+        }
+    };
+
+    /**
+     * 失败后 继续将任务添加到队列中
+     */
+    private Callback callback = new Callback() {
+        public void callback(ResponseFuture future) {
+            if(!future.getResponse().isSuccess()){
+                if(start.get()){
+                    DefaultConsumer.this.getFailRegistryAddress().add(future.getRemoteAddress());
                 }
             }
         }
     };
 
-    public DefaultConsumer(long subscribeTimeout){
-        this.subscribeTimeout = subscribeTimeout;
-        init();
+    private void doSubscributeAysnc(String registryAddress){
+        String[] address = StringUtil.split(registryAddress, ":");
+        client.connect(address[0], Integer.valueOf(address[1]));
+        SubscribeCommandParam param = new SubscribeCommandParam();
+        param.setServiceName(serviceName);
+        param.setMeta(meta);
+        param.setListener(listener);
+        Request request = Request.createRequest(RequestEnum.SUBSCRIBE, param);
+        request.setInvokeType(InvokeTypeEnum.SYNC.getInvokeType());
+        request.setSerialization(SerializationEnum.defaultSerialization());
+        client.invokeAsync(registryAddress, request, callback, subscribeTimeout);
     }
 
-    private void init() {
-        client = new DefaultClient();
+
+    private NotifyListener listener = new NotifyListener() {
+        public void notify(List<RegisterMeta> services) {
+            //这里获得的是全量数据 然后需要按照服务名 进行分类  每个ServiceMeta 对应一个 接口
+            for(RegisterMeta meta : services){
+                for(ServiceMeta serviceMeta : meta.getServiceMeta()){
+                    if(registerInfo.get(serviceMeta.getServiceName()) == null) {
+                        registerInfo.putIfAbsent(serviceMeta.getServiceName(), new CopyOnWriteArrayList<RegisterMeta>());
+                    }
+                    List<RegisterMeta> list = registerInfo.get(serviceMeta.getServiceName());
+                    list.add(meta);
+                }
+            }
+        }
+    };
+
+    public DefaultConsumer(){
+        this(DEFAULT_SUBSCRIBETIMEOUT);
     }
+
+    public DefaultConsumer(long subscribeTimeout){
+        this.subscribeTimeout = subscribeTimeout;
+        client = new DefaultClient();
+        timer.newTimeout(task, republishInterval, TimeUnit.MILLISECONDS);
+    }
+
 
     public void reset() {
         services.clear();
@@ -113,80 +167,99 @@ public class DefaultConsumer implements Consumer{
         registerInfo.clear();
     }
 
-    public void subscribe(NotifyListener listener) {
+    public void subscribe() {
         if (start.compareAndSet(false, true)) {
             if (checkParam(services)){
                 getRPCInfo();
-                client.start();
+                meta = SubscribeMeta.newMeta(services);
+                serviceName = serviceName();
 
-                String serviceName = serviceName();
                 //开始向注册中心订阅服务
                 boolean atLeastSuccess = false;
                 for (String registryAddress : registryAddresses) {
-                    boolean registerResult = doSubscribute(registryAddress, serviceName, listener);
-                    int times = 0;
-                    if (registerResult) {
-                        atLeastSuccess = true;
-                    }
-                    if (!registerResult && times <= 3) {
-                        logger.warn("到注册中心订阅服务失败, 正在重试");
-                        times++;
-                        registerResult = doSubscribute(registryAddress, serviceName, listener);
-                    }
+                    boolean registerResult = doSubscribute(registryAddress, listener);
                     if (registerResult) {
                         logger.warn("在地址为{}的注册中心成功订阅服务", registryAddress);
+                        atLeastSuccess = true;
                     } else {
-                        logger.warn("在地址为{}的注册中心订阅服务失败", registryAddresses);
+                        logger.warn("到注册中心订阅服务失败, 在后台开启重连任务");
+                        failRegistryAddress.add(registryAddress);
                     }
                 }
-                if (!atLeastSuccess) {
-                    logger.warn("该服务没有在任意一台注册中心成功订阅服务 现在关闭客户端请稍后重启");
-                    shutdownGracefully();
+                if(atLeastSuccess){
+                    Class<?>[] interfaces = getArray(services);
+                    //生成动态代理对象
+                    service = ProxyFactory.getProxy(new DefaultRPCInvocation(this), interfaces);
                 }
+            }else{
+                start.set(false);
             }
+        }else{
+            logger.info("消费者已启动请不要重复订阅");
         }
+    }
+
+    private Class<?>[] getArray(List<Class<?>> services) {
+        Class<?>[] clazz = new Class<?>[services.size()];
+        for(int i = 0 ; i < services.size() ; i ++){
+            clazz[i] = services.get(i);
+        }
+        return clazz;
     }
 
     public void shutdownGracefully() {
         if (start.compareAndSet(true, false)) {
-            //关闭前先取消之前发布的服务
-            ArrayList<String> serviceNames = new ArrayList<String>();
-            for (Object o : exports) {
-                serviceNames.add(o.getClass().getSuperclass().getSimpleName());
-            }
-            String serviceName = StringUtil.join(serviceNames.toArray(new String[0]), ",");
+            //关闭前先取消之前订阅的服务
             for (String registryAddress : registryAddresses) {
-                boolean result = unPublish(registryAddress, serviceName);
-                int times = 0;
-                if (!result && times <= 3) {
-                    logger.warn("注销发布失败 正在尝试重新注销");
-                    times++;
-                    result = unPublish(registryAddress, serviceName);
-                }
-                if (result) {
+                boolean result = doUnSubscribe(registryAddress);
+                if(result){
                     logger.warn("服务注销成功");
                 } else {
-                    logger.warn("放弃注销发布地址为{}的{}服务", registryAddress, serviceName);
+                    logger.warn("注销失败放弃注销发布地址为{}的{}服务", registryAddress, serviceName);
                 }
             }
+            timer.stop();
             client.shutdownGracefully();
-            server.shutdownGracefully();
-            vipServer.shutdownGracefully();
         } else {
             logger.warn("该服务提供者正在关闭");
         }
     }
 
-    private boolean doSubscribute(String registryAddress, String serviceName, NotifyListener listener){
+    /**
+     * 取消订阅
+     * @param registryAddress
+     * @return
+     */
+    private boolean doUnSubscribe(String registryAddress) {
+        UnSubscribeCommandParam param = new UnSubscribeCommandParam();
+        param.setMeta(meta);
+        param.setServiceName(serviceName);
+        Request request = Request.createRequest(RequestEnum.UNSUBSCRIBE, param);
+        request.setInvokeType(InvokeTypeEnum.SYNC.getInvokeType());
+        request.setSerialization(SerializationEnum.defaultSerialization());
+        try {
+            Response response = client.invokeSync(registryAddress, request, subscribeTimeout);
+            return response.isSuccess();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (RemotingSendException e) {
+            e.printStackTrace();
+        } catch (RemotingTimeoutException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private boolean doSubscribute(String registryAddress, NotifyListener listener){
         String[] address = StringUtil.split(registryAddress, ":");
         client.connect(address[0], Integer.valueOf(address[1]));
         SubscribeCommandParam param = new SubscribeCommandParam();
-        param.setAddress(AddressUtil.socketAddressToAddress((InetSocketAddress) client.channelTable()
-                .get(registryAddress).localAddress()));
         param.setServiceName(serviceName);
-        param.setVersion(Version.version());
+        param.setMeta(meta);
         param.setListener(listener);
         Request request = Request.createRequest(RequestEnum.SUBSCRIBE, param);
+        request.setInvokeType(InvokeTypeEnum.SYNC.getInvokeType());
+        request.setSerialization(SerializationEnum.defaultSerialization());
         try {
             Response response = client.invokeSync(registryAddress, request, subscribeTimeout);
             return response.isSuccess();
@@ -211,7 +284,7 @@ public class DefaultConsumer implements Consumer{
     }
 
     /**
-     * 从 注解信息中解析参数
+     * 从 注解信息中解析参数  Class 好像不用重写equeal 同一类型的class判定是相等的
      */
     private void getRPCInfo() {
         for(Class clazz : services){
@@ -246,7 +319,7 @@ public class DefaultConsumer implements Consumer{
      * 检验需要 订阅的 接口信息是否正常
      * @param services
      */
-    private boolean checkParam(ConcurrentHashSet<Class<?>> services) {
+    private boolean checkParam(List<Class<?>> services) {
         if(services.size() == 0){
             logger.warn("订阅的服务列表不能为空");
             return false;
@@ -287,36 +360,40 @@ public class DefaultConsumer implements Consumer{
 
     }
 
-    public void addSubscribeService(Class<?> service) {
+    public void addSubscribeService(Class<?> o) {
         if(start.get()){
             logger.warn("消费者正在启动中 请先关闭再注册新服务");
             return;
         }
-        this.services.add(service);
+        this.services.add(o);
     }
 
-    public void addSubscribeServices(Class<?>... services) {
+    public void addSubscribeServices(Class<?>... o) {
         if(start.get()){
             logger.warn("消费者正在启动中 请先关闭再注册新服务");
             return;
         }
-        this.services.addAll(services);
+        for(Class<?> clazz : o){
+            services.add(clazz);
+        }
     }
 
-    public void removeSubscribeService(Class<?> service) {
+    public void removeSubscribeService(Class<?> o) {
         if(start.get()){
             logger.warn("消费者正在启动中 请先关闭");
             return;
         }
-        this.services.remove(service);
+        this.services.remove(o);
     }
 
-    public void removeSuscribeServices(Class<?>... services) {
+    public void removeSuscribeServices(Class<?>... o) {
         if(start.get()){
             logger.warn("消费者正在启动中 请先关闭");
             return;
         }
-        this.services.removeAll(services);
+        for(Class<?> clazz : o){
+            services.remove(clazz);
+        }
     }
 
     public boolean unSubscribe() {
@@ -325,6 +402,10 @@ public class DefaultConsumer implements Consumer{
 
     public Object getService() {
         return service;
+    }
+
+    public void setService(Object o){
+        this.service = o;
     }
 
     public RPCMeta getAnnotationInfo(Class<?> service) {
@@ -341,5 +422,13 @@ public class DefaultConsumer implements Consumer{
 
     public Client getClient() {
         return client;
+    }
+
+    public BlockingQueue<String> getFailRegistryAddress() {
+        return failRegistryAddress;
+    }
+
+    public void setFailRegistryAddress(BlockingQueue<String> failRegistryAddress) {
+        this.failRegistryAddress = failRegistryAddress;
     }
 }

@@ -7,9 +7,11 @@ import com.gxl.Lighting.netty.enums.SerializationEnum;
 import com.gxl.Lighting.netty.heartbeat.HeartBeat;
 import com.gxl.Lighting.netty.serialization.Serialization;
 import com.gxl.Lighting.netty.serialization.SerializationFactory;
+import com.gxl.Lighting.rpc.CommandParam;
 import com.gxl.Lighting.rpc.Request;
 import com.gxl.Lighting.rpc.RequestEnum;
 import com.gxl.Lighting.rpc.Response;
+import com.gxl.Lighting.rpc.param.*;
 import com.gxl.Lighting.util.BytesUtil;
 import com.gxl.Lighting.util.StringUtil;
 import io.netty.buffer.ByteBuf;
@@ -29,10 +31,6 @@ import java.util.List;
  * |----------------------------------------------------------------------------------------|
  */
 public class LightingCodec {
-
-
-    //TODO 好像写了关于 Request 的 编解码 没有 Response的 可以考虑加在 flag 上
-
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(LightingCodec.class);
 
@@ -147,7 +145,7 @@ public class LightingCodec {
         Serialization serialization = SerializationFactory.newInstance(response.getSerialization());
         //创建输出流 方便序列化工具将 对象 写入
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        serialization.serialize(out, response);
+        serialization.serialize(out, response.getResult());
         byte[] body = out.toByteArray();
         byteBuf.writeBytes(body);
         int bodySize = byteBuf.readableBytes();
@@ -184,7 +182,8 @@ public class LightingCodec {
         Serialization serialization = SerializationFactory.newInstance(request.getSerialization());
         //创建输出流 方便序列化工具将 对象 写入
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        serialization.serialize(out, request);
+        //只需要序列化command  这样传输速度快
+        serialization.serialize(out, request.getCommand());
         byte[] body = out.toByteArray();
         byteBuf.writeBytes(body);
         int bodySize = byteBuf.readableBytes();
@@ -336,14 +335,44 @@ public class LightingCodec {
     private Object decodeRequest(ChannelHandlerContext ctx, ByteBuf byteBuf, List<Object> list, byte[] header, byte[] body) throws IOException {
         //根据标识创建Request 对象
         String serializationType = decodeSerialization(header[2]);
-        String invokeType = decodeInvokeType(header[2]);
         Serialization serialization = SerializationFactory.newInstance(serializationType);
-        Object result = serialization.deserialize(new ByteArrayInputStream(body), body.length);
-        if(!(result instanceof Request)){
-            throw new CodecException("解码异常");
-        }
-        Request request = (Request) result;
+        CommandParam param = decodeCommand(header, body, serialization);
+        String invokeType = decodeInvokeType(header[2]);
+
+        Request request = Request.createRequest(RequestEnum.indexOf(header[3]), param);
+        request.setSerialization(serializationType);
+        request.setCommand(RequestEnum.indexOf(header[3]).ordinal());
+        request.set
         request.setInvokeType(invokeType);
+        return result;
+    }
+
+    /**
+     * 解析出命令方式
+     * @param header
+     * @param body
+     * @param serialization
+     * @return
+     */
+    private CommandParam decodeCommand(byte[] header, byte[] body, Serialization serialization) throws IOException{
+        byte b = header[3];
+        RequestEnum requestEnum =  RequestEnum.indexOf(b);
+        CommandParam result = null;
+        if(requestEnum == RequestEnum.INVOKE){
+            result = serialization.deserialize(new ByteArrayInputStream(body), body.length, InvokerCommandParam.class);
+        }
+        if(requestEnum == RequestEnum.UNREGISTRY){
+            result = serialization.deserialize(new ByteArrayInputStream(body), body.length, UnRegisterCommandParam.class);
+        }
+        if(requestEnum == RequestEnum.REGISTRY){
+            result = serialization.deserialize(new ByteArrayInputStream(body), body.length, RegisterCommandParam.class);
+        }
+        if(requestEnum == RequestEnum.SUBSCRIBE){
+            result = serialization.deserialize(new ByteArrayInputStream(body), body.length, SubscribeCommandParam.class);
+        }
+        if(requestEnum == RequestEnum.UNSUBSCRIBE){
+            result = serialization.deserialize(new ByteArrayInputStream(body), body.length, UnSubscribeCommandParam.class);
+        }
         return result;
     }
 

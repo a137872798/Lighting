@@ -5,10 +5,13 @@ import com.gxl.Lighting.NamedThreadFactory;
 import com.gxl.Lighting.Version;
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
+import com.gxl.Lighting.meta.RegisterMeta;
 import com.gxl.Lighting.netty.Client;
 import com.gxl.Lighting.netty.DefaultClient;
 import com.gxl.Lighting.netty.DefaultServer;
 import com.gxl.Lighting.netty.Server;
+import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
+import com.gxl.Lighting.netty.enums.SerializationEnum;
 import com.gxl.Lighting.provider.processor.InvokerProcessor;
 import com.gxl.Lighting.proxy.Invoker;
 import com.gxl.Lighting.rpc.*;
@@ -16,14 +19,14 @@ import com.gxl.Lighting.rpc.param.RegisterCommandParam;
 import com.gxl.Lighting.rpc.param.UnRegisterCommandParam;
 import com.gxl.Lighting.util.AddressUtil;
 import com.gxl.Lighting.util.StringUtil;
-import com.sun.media.jfxmedia.logging.Logger;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
 import io.netty.util.TimerTask;
-import sun.rmi.runtime.Log;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
@@ -58,10 +61,16 @@ public class DefaultProvider implements Provider {
     private Timer timer;
 
     /**
+     * 注册的元数据
+     */
+    private RegisterMeta meta;
+
+    /**
      * 注册的 超时时间
      */
     private long registerTimeout;
 
+    private static final long DEFAULT_REGISTERTIMEOUT = 1000;
     /**
      * 重连到注册中心的 时间间隔
      */
@@ -75,7 +84,7 @@ public class DefaultProvider implements Provider {
     /**
      * 该服务提供者 暴露的服务
      */
-    private ConcurrentHashSet<Object> exports = new ConcurrentHashSet<Object>();
+    private List<Class<?>> exports = new CopyOnWriteArrayList<Class<?>>();
 
     private final AtomicBoolean start = new AtomicBoolean(false);
 
@@ -86,18 +95,20 @@ public class DefaultProvider implements Provider {
 
     private final TimerTask republishTask = new TimerTask() {
         public void run(Timeout timeout) throws Exception {
-            String registryAddress = getFailRegistryAddress().take();
+        String registryAddress = getFailRegistryAddress().take();
+        if(start.get()) {
             doPublishAsync(registryAddress);
             timer.newTimeout(this, republishInterval, TimeUnit.MILLISECONDS);
+        }
         }
     };
 
     private final Callback republishCallback = new Callback() {
         public void callback(ResponseFuture future) {
-            //当失败时  重新将任务 添加到 队列中 这样定时器还能继续触发
-            if (!future.getResponse().isSuccess()) {
-                DefaultProvider.this.getFailRegistryAddress().add(future.getRemoteAddress());
-            }
+        //当失败时  重新将任务 添加到 队列中 这样定时器还能继续触发
+        if (!future.getResponse().isSuccess()) {
+            DefaultProvider.this.getFailRegistryAddress().add(future.getRemoteAddress());
+        }
         }
     };
 
@@ -109,20 +120,20 @@ public class DefaultProvider implements Provider {
     private void doPublishAsync(String registryAddress) {
         //连接到注册中心
         RegisterCommandParam param = new RegisterCommandParam();
-        param.setVersion(Version.version());
-        param.setAddress(AddressUtil.socketAddressToAddress((InetSocketAddress) client.channelTable().get(registryAddress).localAddress(),DEFAULT_PORT));
+        param.setRegisterMeta(meta);
         param.setServiceName(serviceName);
         Request request = Request.createRequest(RequestEnum.REGISTRY, param);
-        Response response = null;
+        request.setSerialization(SerializationEnum.defaultSerialization());
+        request.setInvokeType(InvokeTypeEnum.ASYNC.getInvokeType());
         client.invokeAsync(registryAddress, request, republishCallback, registerTimeout);
+    }
+
+    public DefaultProvider(){
+        this(DEFAULT_REGISTERTIMEOUT);
     }
 
     public DefaultProvider(long registerTimeout) {
         this.registerTimeout = registerTimeout;
-        init();
-    }
-
-    private void init() {
         client = new DefaultClient();
         server = new DefaultServer(DEFAULT_PORT);
         vipServer = new DefaultServer(VIP_PORT);
@@ -132,9 +143,18 @@ public class DefaultProvider implements Provider {
         timer.newTimeout(republishTask, republishInterval, TimeUnit.MILLISECONDS);
     }
 
+
+    private String createServiceName(List<Class<?>> exports) {
+        String[] serviceNames = new String[exports.size()];
+        for(int i = 0 ;i < exports.size(); i++){
+            serviceNames[i] = exports.get(i).getSimpleName();
+        }
+        return StringUtil.join(serviceNames, ",");
+    }
+
     //每次 发布 必须是 提供者 处于停止 状态  可以做成热部署 但是在并发情况下会有很多发布请求吧 这样不知道是否合适
 
-    public void addPublishService(Object o) {
+    public void addPublishService(Class<?> o) {
         if (start.get()) {
             logger.warn("服务提供者已经启动，请先停止提供者再发布新服务");
             return;
@@ -142,16 +162,18 @@ public class DefaultProvider implements Provider {
         exports.add(o);
     }
 
-    public void addPublishServices(Object... o) {
+    public void addPublishServices(Class<?>... o) {
         if (start.get()) {
             logger.warn("服务提供者已经启动，请先停止提供者再发布新服务");
             return;
         }
-        exports.addAll(o);
+        for(Class<?> clazz : o){
+            exports.add(clazz);
+        }
     }
 
 
-    public void removePublishService(Object o) {
+    public void removePublishService(Class<?> o) {
         if (start.get()) {
             logger.warn("服务提供者已经启动，请先停止提供者");
             return;
@@ -159,30 +181,32 @@ public class DefaultProvider implements Provider {
         exports.remove(o);
     }
 
-    public void removePublishServices(Object... o) {
+    public void removePublishServices(Class<?>... o) {
         if (start.get()) {
             logger.warn("服务提供者已经启动，请先停止提供者");
             return;
         }
-        exports.removeAll(o);
+        for(Class<?> clazz : o){
+            exports.remove(clazz);
+        }
     }
 
     /**
      * 发布
      */
-    public void publish() {
+    public void publish() throws UnknownHostException {
         if (start.compareAndSet(false, true)) {
             if (checkParam(monitorAddress, registryAddresses, exports)) {
                 invoker = createInvoker();
                 server.start();
                 vipServer.start();
-                ArrayList<String> serviceNames = new ArrayList<String>();
-                for (Object o : exports) {
-                    serviceNames.add(o.getClass().getSuperclass().getSimpleName());
-                }
+                String address = StringUtil.join(new String[]{InetAddress.getLocalHost()
+                        .getHostAddress(),String.valueOf(DEFAULT_PORT)},":");
+                serviceName = createServiceName(exports);
+
+                meta = RegisterMeta.newMeta(exports, address);
 
                 logger.info("正在发布服务...");
-                serviceName = StringUtil.join(serviceNames.toArray(new String[0]), ",");
                 for (String registryAddress : registryAddresses) {
                     boolean registerResult = doPublish(registryAddress);
                     if (registerResult) {
@@ -197,33 +221,28 @@ public class DefaultProvider implements Provider {
                 start.set(false);
             }
         } else {
-            logger.warn("该服务提供者已经启动");
+            logger.warn("该服务提供者已经启动请不要重复注册");
         }
     }
 
     public void shutdownGracefully() {
         if (start.compareAndSet(true, false)) {
             //关闭前先取消之前发布的服务
-            ArrayList<String> serviceNames = new ArrayList<String>();
-            for (Object o : exports) {
-                serviceNames.add(o.getClass().getSuperclass().getSimpleName());
-            }
-            String serviceName = StringUtil.join(serviceNames.toArray(new String[0]), ",");
             logger.info("正在注销发布的服务...");
             for (String registryAddress : registryAddresses) {
 
                 //注销 不采用 后台线程执行的方式
-                boolean result = unPublish(registryAddress, serviceName);
+                boolean result = doUnPublish(registryAddress);
                 if (result) {
-                    logger.warn("服务注销成功");
+                    logger.warn("地址为{}的服务注销成功", registryAddress);
                 } else {
-                    logger.warn("放弃注销发布地址为{}的{}服务", registryAddress, serviceName);
+                    logger.warn("注销失败,放弃注销发布地址为{}的{}服务", registryAddress, serviceName);
                 }
             }
+            timer.stop();
             client.shutdownGracefully();
             server.shutdownGracefully();
             vipServer.shutdownGracefully();
-            timer.stop();
         } else {
             logger.warn("该服务提供者正在关闭");
         }
@@ -241,11 +260,11 @@ public class DefaultProvider implements Provider {
      */
     private boolean doPublish(String registryAddress) {
         RegisterCommandParam param = new RegisterCommandParam();
-        param.setVersion(Version.version());
-        //注册一律使用 普通服务器的 端口
-        param.setAddress(AddressUtil.socketAddressToAddress((InetSocketAddress) client.channelTable().get(registryAddress).localAddress(),DEFAULT_PORT));
+        param.setRegisterMeta(meta);
         param.setServiceName(serviceName);
         Request request = Request.createRequest(RequestEnum.REGISTRY, param);
+        request.setSerialization(SerializationEnum.defaultSerialization());
+        request.setInvokeType(InvokeTypeEnum.SYNC.getInvokeType());
         Response response = null;
         try {
             response = client.invokeSync(registryAddress, request, registerTimeout);
@@ -264,13 +283,13 @@ public class DefaultProvider implements Provider {
     /**
      * 针对之前发布的所有服务 进行注销
      */
-    public boolean unPublish(String registryAddress, String serviceName) {
-
+    private boolean doUnPublish(String registryAddress) {
         UnRegisterCommandParam param = new UnRegisterCommandParam();
-        param.setVersion(Version.version());
+        param.setMeta(meta);
         param.setServiceName(serviceName);
-        param.setAddress(AddressUtil.socketAddressToAddress((InetSocketAddress) client.channelTable().get(registryAddress).localAddress(), DEFAULT_PORT));
         Request request = Request.createRequest(RequestEnum.UNREGISTRY, param);
+        request.setSerialization(SerializationEnum.defaultSerialization());
+        request.setInvokeType(InvokeTypeEnum.SYNC.getInvokeType());
         Response response = null;
         try {
             response = client.invokeSync(registryAddress, request, 3);
@@ -286,8 +305,14 @@ public class DefaultProvider implements Provider {
         return false;
     }
 
+//    public void unPublish(){
+//        for(String registryAddress : registryAddresses){
+//            doUnPublish(registryAddress);
+//        }
+//    }
+
     private Invoker createInvoker() {
-        return new Invoker(exports.toList());
+        return new Invoker(exports);
     }
 
     /**
@@ -297,7 +322,7 @@ public class DefaultProvider implements Provider {
      * @param registryAddresses
      * @param exports
      */
-    private boolean checkParam(String monitorAddress, String[] registryAddresses, ConcurrentHashSet<Object> exports) {
+    private boolean checkParam(String monitorAddress, String[] registryAddresses, List<Class<?>> exports) {
         if (StringUtil.isEmpty(monitorAddress)) {
             logger.info("没有设置监控中心的地址 无法启动");
             return false;
@@ -369,11 +394,11 @@ public class DefaultProvider implements Provider {
         this.invoker = invoker;
     }
 
-    public ConcurrentHashSet<Object> getExports() {
+    public List<Class<?>> getExports() {
         return exports;
     }
 
-    public void setExports(ConcurrentHashSet<Object> exports) {
+    public void setExports(List<Class<?>> exports) {
         this.exports = exports;
     }
 

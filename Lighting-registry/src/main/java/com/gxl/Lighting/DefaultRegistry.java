@@ -4,16 +4,16 @@ import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
 import com.gxl.Lighting.meta.RegisterMeta;
 import com.gxl.Lighting.meta.ServiceMeta;
-import com.gxl.Lighting.meta.SubscributeMeta;
+import com.gxl.Lighting.meta.SubscribeMeta;
 import com.gxl.Lighting.netty.DefaultServer;
 import com.gxl.Lighting.netty.HeartBeatConfig;
 import com.gxl.Lighting.netty.Server;
 import com.gxl.Lighting.rpc.Listener;
 import com.gxl.Lighting.rpc.RequestEnum;
 import com.gxl.Lighting.rpc.param.RegisterCommandParam;
-import com.gxl.Lighting.rpc.param.SubscributeCommandParam;
+import com.gxl.Lighting.rpc.param.SubscribeCommandParam;
 import com.gxl.Lighting.rpc.param.UnRegisterCommandParam;
-import com.gxl.Lighting.rpc.param.UnSubscributeCommandParam;
+import com.gxl.Lighting.rpc.param.UnSubscribeCommandParam;
 import com.gxl.Lighting.processor.RegisterProcessor;
 import com.gxl.Lighting.processor.SubscributeProcessor;
 import com.gxl.Lighting.processor.UnRegisterProcessor;
@@ -46,7 +46,7 @@ public class DefaultRegistry implements Registry {
      */
     private final ConcurrentHashSet<RegisterMeta> registers = new ConcurrentHashSet<RegisterMeta>();
 
-    private final ConcurrentHashSet<SubscributeMeta> subscributes = new ConcurrentHashSet<SubscributeMeta>();
+    private final ConcurrentHashSet<SubscribeMeta> subscribes = new ConcurrentHashSet<SubscribeMeta>();
 
     /**
      * 监听的是 服务级别 但是订阅的时候 可以一次针对多个 ServiceMeta 进行监听
@@ -56,7 +56,7 @@ public class DefaultRegistry implements Registry {
     /**
      * 每个订阅者下面的 全部注册服务  这里value 必须是 registerMeta 因为 需要 服务的 地址
      */
-    private final ConcurrentMap<SubscributeMeta, CopyOnWriteArrayList<RegisterMeta>> srInfo = new ConcurrentHashMap<SubscributeMeta, CopyOnWriteArrayList<RegisterMeta>>();
+    private final ConcurrentMap<SubscribeMeta, CopyOnWriteArrayList<RegisterMeta>> srInfo = new ConcurrentHashMap<SubscribeMeta, CopyOnWriteArrayList<RegisterMeta>>();
 
     private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("registry scheduleExecutor", true));
 
@@ -76,9 +76,9 @@ public class DefaultRegistry implements Registry {
 
     private void init() {
         server.getProcessorManager().registerProcessor(RequestEnum.REGISTRY, new RegisterProcessor(this));
-        server.getProcessorManager().registerProcessor(RequestEnum.SUBSCRIBUTE, new SubscributeProcessor(this));
+        server.getProcessorManager().registerProcessor(RequestEnum.SUBSCRIBE, new SubscributeProcessor(this));
         server.getProcessorManager().registerProcessor(RequestEnum.UNREGISTRY, new UnRegisterProcessor(this));
-        server.getProcessorManager().registerProcessor(RequestEnum.UNSUBSCRIBUTE, new UnSubscributeProcessor(this));
+        server.getProcessorManager().registerProcessor(RequestEnum.UNSUBSCRIBE, new UnSubscributeProcessor(this));
     }
 
     public void start() {
@@ -88,7 +88,7 @@ public class DefaultRegistry implements Registry {
     //从参数中抽取想要的 变量生成 订阅/注册信息后设置到任务队列中执行任务
 
     public void register(final RegisterCommandParam param) {
-        RegisterMeta meta = RegisterMeta.newMeta(param);
+        RegisterMeta meta = param.getRegisterMeta();
         registers.add(meta);
         addRegister(meta);
         DefaultRegistry.this.notify(meta.getServiceMeta());
@@ -105,7 +105,7 @@ public class DefaultRegistry implements Registry {
             if (listeners != null) {
                 for (Map.Entry<String, NotifyListener> temp : listeners.entrySet()) {
                     String address = temp.getKey();
-                    for (SubscributeMeta subscribute : srInfo.keySet()) {
+                    for (SubscribeMeta subscribute : srInfo.keySet()) {
                         if (subscribute.getAddress().equals(address)) {
                             temp.getValue().notify(srInfo.get(subscribute));
                         }
@@ -122,13 +122,13 @@ public class DefaultRegistry implements Registry {
      */
     private void addRegister(RegisterMeta meta) {
         ServiceMeta[] metas = meta.getServiceMeta();
-        for (SubscributeMeta subscribute : srInfo.keySet()) {
+        for (SubscribeMeta subscribute : srInfo.keySet()) {
             //直接跳跃到这里 只要有一个能对应上 就代表这个订阅者可以获取到 这个 提供者的 信息 避免重复添加
             loop:
             //该订阅者订阅的 全部 服务
             for (ServiceMeta serviceMeta : subscribute.getServiceMeta()) {
                 for (ServiceMeta registerMeta : metas) {
-                    if (serviceMeta == registerMeta) {
+                    if (serviceMeta.equals(registerMeta)) {
                         srInfo.get(subscribute).add(meta);
                         continue loop;
                     }
@@ -143,7 +143,7 @@ public class DefaultRegistry implements Registry {
      * @param meta
      */
     private void removeRegister(RegisterMeta meta) {
-        for (Map.Entry<SubscributeMeta, CopyOnWriteArrayList<RegisterMeta>> entry : srInfo.entrySet()) {
+        for (Map.Entry<SubscribeMeta, CopyOnWriteArrayList<RegisterMeta>> entry : srInfo.entrySet()) {
             for (RegisterMeta registerMeta : entry.getValue()) {
                 if (registerMeta.equals(meta)) {
                     entry.getValue().remove(meta);
@@ -158,21 +158,20 @@ public class DefaultRegistry implements Registry {
      * @param param
      */
     public void unregister(final UnRegisterCommandParam param) {
-        RegisterMeta meta = RegisterMeta.newMeta(param);
+        RegisterMeta meta = param.getMeta();
         registers.remove(meta);
         removeRegister(meta);
         DefaultRegistry.this.notify(meta.getServiceMeta());
     }
-
 
     /**
      * 订阅指定服务
      *
      * @param param
      */
-    public void subscribute(final SubscributeCommandParam param) {
-        SubscributeMeta meta = SubscributeMeta.newMeta(param);
-        subscributes.add(meta);
+    public void subscribe(final SubscribeCommandParam param) {
+        SubscribeMeta meta = param.getMeta();
+        subscribes.add(meta);
         addListener(meta, param.getListener());
         addOldRegister(meta);
         DefaultRegistry.this.notify(meta.getServiceMeta());
@@ -184,7 +183,7 @@ public class DefaultRegistry implements Registry {
      *
      * @param meta
      */
-    private void addOldRegister(SubscributeMeta meta) {
+    private void addOldRegister(SubscribeMeta meta) {
         for (RegisterMeta temp : registers) {
             ServiceMeta[] subscributeMetas = meta.getServiceMeta();
             ServiceMeta[] registerMetas = temp.getServiceMeta();
@@ -200,11 +199,10 @@ public class DefaultRegistry implements Registry {
                                 list = old;
                             }
                             list.add(temp);
-                            continue loop;
                         } else {
                             srInfo.get(meta).add(temp);
-                            continue loop;
                         }
+                        continue loop;
                     }
                 }
             }
@@ -217,7 +215,7 @@ public class DefaultRegistry implements Registry {
      * @param meta
      * @param listener
      */
-    private void addListener(SubscributeMeta meta, NotifyListener listener) {
+    private void addListener(SubscribeMeta meta, NotifyListener listener) {
         ServiceMeta[] serviceMetas = meta.getServiceMeta();
         for (ServiceMeta serviceMeta : serviceMetas) {
             ConcurrentHashMap<String, NotifyListener> listenerMap = new ConcurrentHashMap<String, NotifyListener>();
@@ -236,7 +234,7 @@ public class DefaultRegistry implements Registry {
     /**
      * 移除监听器
      */
-    private void removeListener(SubscributeMeta meta) {
+    private void removeListener(SubscribeMeta meta) {
         ServiceMeta[] serviceMetas = meta.getServiceMeta();
         for (ServiceMeta serviceMeta : serviceMetas) {
             ConcurrentMap<String, NotifyListener> listener = notifyListeners.get(meta);
@@ -253,9 +251,9 @@ public class DefaultRegistry implements Registry {
      *
      * @param param
      */
-    public void unsubscribute(final UnSubscributeCommandParam param) {
-        SubscributeMeta meta = SubscributeMeta.newMeta(param);
-        subscributes.remove(meta);
+    public void unsubscribe(final UnSubscribeCommandParam param) {
+        SubscribeMeta meta = param.getMeta();
+        subscribes.remove(meta);
         removeListener(meta);
         removeSubscribute(meta);
     }
@@ -265,8 +263,8 @@ public class DefaultRegistry implements Registry {
      *
      * @param meta
      */
-    private void removeSubscribute(SubscributeMeta meta) {
-        for (SubscributeMeta temp : srInfo.keySet()) {
+    private void removeSubscribute(SubscribeMeta meta) {
+        for (SubscribeMeta temp : srInfo.keySet()) {
             if (temp.equals(meta)) {
                 srInfo.remove(temp);
             }
@@ -285,7 +283,7 @@ public class DefaultRegistry implements Registry {
         return registers.toList();
     }
 
-    public List<SubscributeMeta> subscributes() {
-        return subscributes.toList();
+    public List<SubscribeMeta> subscributes() {
+        return subscribes.toList();
     }
 }

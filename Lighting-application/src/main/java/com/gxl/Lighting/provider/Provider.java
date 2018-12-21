@@ -4,21 +4,21 @@ import com.gxl.Lighting.Application;
 import com.gxl.Lighting.rpc.RemotingSendException;
 import com.gxl.Lighting.rpc.RemotingTimeoutException;
 
+import java.net.UnknownHostException;
+
 /**
  * 服务提供者接口
  */
 public interface Provider extends Application {
 
-    void addPublishService(Object o);
+    void addPublishService(Class<?> o);
 
-    void addPublishServices(Object... o);
+    void addPublishServices(Class<?>... o);
 
-    void publish();
+    void publish() throws UnknownHostException;
 
-    boolean unPublish(String registryAddress, String serviceName);
+    void removePublishService(Class<?> o);
 
-    void removePublishService(Object o);
-
-    void removePublishServices(Object... o);
+    void removePublishServices(Class<?>... o);
 }
 

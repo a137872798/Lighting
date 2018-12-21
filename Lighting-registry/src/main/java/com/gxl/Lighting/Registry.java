@@ -1,11 +1,11 @@
 package com.gxl.Lighting;
 
 import com.gxl.Lighting.meta.RegisterMeta;
-import com.gxl.Lighting.meta.SubscributeMeta;
+import com.gxl.Lighting.meta.SubscribeMeta;
 import com.gxl.Lighting.rpc.param.RegisterCommandParam;
-import com.gxl.Lighting.rpc.param.SubscributeCommandParam;
+import com.gxl.Lighting.rpc.param.SubscribeCommandParam;
 import com.gxl.Lighting.rpc.param.UnRegisterCommandParam;
-import com.gxl.Lighting.rpc.param.UnSubscributeCommandParam;
+import com.gxl.Lighting.rpc.param.UnSubscribeCommandParam;
 
 import java.util.List;
 
@@ -30,13 +30,13 @@ public interface Registry {
      * 处理订阅请求
      * @param param
      */
-    void subscribute(SubscributeCommandParam param);
+    void subscribe(SubscribeCommandParam param);
 
     /**
      * 取消订阅
      * @param param
      */
-    void unsubscribute(UnSubscributeCommandParam param);
+    void unsubscribe(UnSubscribeCommandParam param);
 
     /**
      * 启动注册中心
@@ -58,6 +58,6 @@ public interface Registry {
      * 获取订阅者信息
      * @return
      */
-    List<SubscributeMeta> subscributes();
+    List<SubscribeMeta> subscributes();
 }
 

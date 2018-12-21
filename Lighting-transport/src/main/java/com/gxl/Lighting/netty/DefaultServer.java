@@ -66,6 +66,10 @@ public class DefaultServer implements Server{
         this(-1);
     }
 
+    public DefaultServer(HeartBeatConfig config){
+        this(-1, config);
+    }
+
     public DefaultServer(int port){
         this(port, new HeartBeatConfig());
     }

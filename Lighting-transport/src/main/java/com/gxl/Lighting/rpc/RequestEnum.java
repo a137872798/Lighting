@@ -20,7 +20,7 @@ public enum RequestEnum {
     /**
      * 取消订阅
      */
-    UNSUBSCRIBUTE,
+    UNSUBSCRIBE,
     /**
      * RPC调用
      */

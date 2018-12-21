@@ -6,7 +6,7 @@ import java.lang.reflect.Proxy;
 
 public class ProxyFactory {
 
-    public Object getProxy(RPCInvocation rpcInvocation, Class[] interfaces){
+    public static Object getProxy(RPCInvocation rpcInvocation, Class[] interfaces){
         return Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), interfaces, new RPCInvocationHanlder(rpcInvocation));
     }
 }

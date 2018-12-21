@@ -21,6 +21,6 @@ public interface Serialization {
      * @param in
      * @return
      */
-    Object deserialize(InputStream in, int bodySize) throws IOException;
+    <T> T deserialize(InputStream in, int bodySize, Class<T> clazz) throws IOException;
 }
 

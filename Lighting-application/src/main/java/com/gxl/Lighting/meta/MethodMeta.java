@@ -1,5 +1,7 @@
 package com.gxl.Lighting.meta;
 
+import java.util.Arrays;
+
 /**
  * 方法级别元数据
  */
@@ -7,7 +9,7 @@ public class MethodMeta {
 
     private String methodName;
 
-    private Class<?> params;
+    private Class<?>[] paramsType;
 
     public String getMethodName() {
         return methodName;
@@ -17,12 +19,12 @@ public class MethodMeta {
         this.methodName = methodName;
     }
 
-    public Class<?> getParams() {
-        return params;
+    public Class<?>[] getParamsType() {
+        return paramsType;
     }
 
-    public void setParams(Class<?> params) {
-        this.params = params;
+    public void setParamsType(Class<?>[] paramsType) {
+        this.paramsType = paramsType;
     }
 
     @Override
@@ -33,13 +35,14 @@ public class MethodMeta {
         MethodMeta that = (MethodMeta) o;
 
         if (methodName != null ? !methodName.equals(that.methodName) : that.methodName != null) return false;
-        return params != null ? params.equals(that.params) : that.params == null;
+        // Probably incorrect - comparing Object[] arrays with Arrays.equals
+        return Arrays.equals(paramsType, that.paramsType);
     }
 
     @Override
     public int hashCode() {
         int result = methodName != null ? methodName.hashCode() : 0;
-        result = 31 * result + (params != null ? params.hashCode() : 0);
+        result = 31 * result + Arrays.hashCode(paramsType);
         return result;
     }
 }

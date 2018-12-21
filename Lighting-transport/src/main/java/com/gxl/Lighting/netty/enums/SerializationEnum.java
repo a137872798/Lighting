@@ -12,6 +12,8 @@ public enum SerializationEnum {
 
     private String serialization;
 
+
+
     SerializationEnum(byte flag, String serialization){
         this.flag = flag;
         this.serialization = serialization;
@@ -50,5 +52,9 @@ public enum SerializationEnum {
             }
         }
         return false;
+    }
+
+    public static String defaultSerialization(){
+        return SerializationEnum.JSON.serialization;
     }
 }

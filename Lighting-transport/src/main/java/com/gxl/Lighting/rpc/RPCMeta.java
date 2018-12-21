@@ -1,4 +1,4 @@
-package com.gxl.Lighting.consumer;
+package com.gxl.Lighting.rpc;
 
 import com.gxl.Lighting.loadbalance.LoadBalance;
 
