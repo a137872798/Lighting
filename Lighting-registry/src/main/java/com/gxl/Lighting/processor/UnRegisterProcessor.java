@@ -3,12 +3,11 @@ package com.gxl.Lighting.processor;
 import com.gxl.Lighting.Registry;
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
+import com.gxl.Lighting.netty.Request;
+import com.gxl.Lighting.netty.Response;
 import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
-import com.gxl.Lighting.rpc.Request;
-import com.gxl.Lighting.rpc.Response;
-import com.gxl.Lighting.rpc.param.RegisterCommandParam;
-import com.gxl.Lighting.rpc.param.UnRegisterCommandParam;
-import com.gxl.Lighting.rpc.processor.Processor;
+import com.gxl.Lighting.netty.param.UnRegisterCommandParam;
+import com.gxl.Lighting.netty.processor.Processor;
 import io.netty.channel.ChannelHandlerContext;
 
 public class UnRegisterProcessor implements Processor {
@@ -23,21 +22,25 @@ public class UnRegisterProcessor implements Processor {
 
     public void processRequest(ChannelHandlerContext ctx, Request request) {
         String invokeType = request.getInvokeType();
-        if(invokeType.equals(InvokeTypeEnum.ASYNC)) {
+        if(invokeType.equals(InvokeTypeEnum.ASYNC.getInvokeType())) {
             registry.unregister((UnRegisterCommandParam) request.getParam());
             //将结果写入对端
             Response response = new Response(request.getId());
-            response.setSuccess(true);
+            response.setSerialization(request.getSerialization());
+            response.getResult().setSuccess(true);
+            response.setInvokeType(InvokeTypeEnum.ONEWAY.getInvokeType());
             ctx.writeAndFlush(response);
         }
-        if(invokeType.equals(InvokeTypeEnum.SYNC)){
+        if(invokeType.equals(InvokeTypeEnum.SYNC.getInvokeType())){
             registry.unregister((UnRegisterCommandParam) request.getParam());
             //将结果写入对端
             Response response = new Response(request.getId());
-            response.setSuccess(true);
+            response.setSerialization(request.getSerialization());
+            response.getResult().setSuccess(true);
+            response.setInvokeType(InvokeTypeEnum.ONEWAY.getInvokeType());
             ctx.writeAndFlush(response);
         }
-        if(invokeType.equals(InvokeTypeEnum.ONEWAY)){
+        if(invokeType.equals(InvokeTypeEnum.ONEWAY.getInvokeType())){
             registry.unregister((UnRegisterCommandParam) request.getParam());
         }
     }

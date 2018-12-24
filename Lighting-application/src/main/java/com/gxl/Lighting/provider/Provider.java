@@ -1,9 +1,6 @@
 package com.gxl.Lighting.provider;
 
 import com.gxl.Lighting.Application;
-import com.gxl.Lighting.rpc.RemotingSendException;
-import com.gxl.Lighting.rpc.RemotingTimeoutException;
-
 import java.net.UnknownHostException;
 
 /**
@@ -11,11 +8,15 @@ import java.net.UnknownHostException;
  */
 public interface Provider extends Application {
 
+    void setRef(Object object);
+
+    void setRefs(Object... objects);
+
     void addPublishService(Class<?> o);
 
     void addPublishServices(Class<?>... o);
 
-    void publish() throws UnknownHostException;
+    void publish();
 
     void removePublishService(Class<?> o);
 

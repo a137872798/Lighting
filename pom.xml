@@ -11,18 +11,18 @@
     <modules>
         <module>Lighting-transport</module>
         <module>Lighting-registry</module>
-        <module>Lighting-monitor</module>
-        <module>Lighting-proxy</module>
         <module>Lighting-common</module>
         <module>Lighting-logging</module>
         <module>Lighting-common</module>
         <module>Lighting-application</module>
-        <module>Lighting-cluster</module>
+        <module>Lighting-example</module>
     </modules>
 
 
     <properties>
         <log4j2.version>2.6.2</log4j2.version>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
 
 
@@ -53,6 +53,11 @@
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
             <version>${log4j2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.caucho</groupId>
+            <artifactId>hessian</artifactId>
+            <version>4.0.38</version>
         </dependency>
         <dependency>
             <groupId>log4j</groupId>

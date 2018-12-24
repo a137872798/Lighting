@@ -38,7 +38,7 @@ public enum SerializationEnum {
 
     public static String getValue(byte b){
         for(SerializationEnum temp : SerializationEnum.values()){
-            if((temp.getFlag() & b ) == 1){
+            if((temp.getFlag() & b ) == temp.getFlag()){
                 return temp.getSerialization();
             }
         }

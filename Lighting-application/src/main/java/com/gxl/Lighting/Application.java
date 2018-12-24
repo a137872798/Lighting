@@ -12,8 +12,4 @@ public interface Application {
     String[] getRegistryAddresses();
 
     void setRegistryAddresses(String[] address);
-
-    String getMonitorAddress();
-
-    void setMonitorAddress(String address);
 }

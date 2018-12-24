@@ -15,7 +15,7 @@ public class SerializationFactory {
 
     public static Serialization newInstance(String type){
         if(SerializationEnum.JSON.getSerialization().equalsIgnoreCase(type)){
-            return JsonSerialization.getINSTANCE();
+            return FastJsonSerialization.getINSTANCE();
         }
         if(SerializationEnum.HESSIAN.getSerialization().equalsIgnoreCase(type)){
             return HessianSerialization.getINSTANCE();

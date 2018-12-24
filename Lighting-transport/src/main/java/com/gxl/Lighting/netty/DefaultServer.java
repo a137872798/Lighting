@@ -6,18 +6,19 @@ import com.gxl.Lighting.logging.InternalLoggerFactory;
 import com.gxl.Lighting.netty.codec.LightingDecoder;
 import com.gxl.Lighting.netty.codec.LightingEncoder;
 import com.gxl.Lighting.netty.heartbeat.HeartBeatHandler;
-import com.gxl.Lighting.rpc.DispatchHandler;
-import com.gxl.Lighting.rpc.processor.ProcessorManager;
+import com.gxl.Lighting.netty.processor.ProcessorManager;
+import com.gxl.Lighting.util.AddressUtil;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DefaultServer implements Server{
 
@@ -46,7 +47,7 @@ public class DefaultServer implements Server{
     /**
      * 每个服务器 需要维护下面所有的客户端
      */
-    private Map<Channel, ClientMeta> clientMap = new ConcurrentHashMap<Channel, ClientMeta>();
+    private Map<String, ClientMeta> clientMap = new ConcurrentHashMap<String, ClientMeta>();
 
     /**
      * 该服务器下 处理所有请求的对象
@@ -61,6 +62,8 @@ public class DefaultServer implements Server{
     private static final int DEFAULT_HEARTBEATTIMES = 3;
 
     private final int port;
+
+    private AtomicBoolean closed = new AtomicBoolean(true);
 
     public DefaultServer(){
         this(-1);
@@ -122,7 +125,7 @@ public class DefaultServer implements Server{
     }
 
     public void addHeartBeatTimes(Channel channel) {
-        ClientMeta meta = clientMap.get(channel);
+        ClientMeta meta = clientMap.get(AddressUtil.socketAddressToAddress((InetSocketAddress)channel.remoteAddress()));
         if(meta == null){
             logger.error("在服务器上没有找到地址为" + channel.remoteAddress() + "的客户端对象");
         } else {
@@ -132,7 +135,7 @@ public class DefaultServer implements Server{
         }
     }
 
-    public Map<Channel, ClientMeta> getClientMap() {
+    public Map<String, ClientMeta> getClientMap() {
         return clientMap;
     }
 
@@ -141,7 +144,9 @@ public class DefaultServer implements Server{
     }
 
     private void ifReconnect(final ClientMeta meta) {
-        int maxHeartBeatTimes = heartBeatTimes.get(meta);
+        heartBeatTimes.putIfAbsent(meta, 0);
+        Integer maxHeartBeatTimes = heartBeatTimes.get(meta);
+        if(maxHeartBeatTimes == null)
         if(meta.getHeartBeatTimes() >= maxHeartBeatTimes){
             logger.info("地址为" + meta.getAddress() + "的客户端对象 因为长时间未响应 已经断开了与该客户端的连接");
             meta.getChannel().close().addListener(new ChannelFutureListener() {
@@ -163,60 +168,73 @@ public class DefaultServer implements Server{
     }
 
     public void start() {
-        serverBootstrap = new ServerBootstrap();
-        final AdminHandler admin = new AdminHandler();
-        clientMap = admin.getClientMap();
-        serverBootstrap.group(bossEventLoopGroup, workerEventLoopGroup).channel(NioServerSocketChannel.class)
-                .childOption(ChannelOption.TCP_NODELAY, true)
-                .childOption(ChannelOption.SO_REUSEADDR, true)
-                .childHandler(new ChannelInitializer<Channel>() {
-                    protected void initChannel(Channel channel) throws Exception {
-                        channel.pipeline().addLast("encoder", new LightingEncoder())
-                                .addLast("encoder", new LightingDecoder())
-                                .addLast(admin)
-                                .addLast(new HeartBeatHandler(heartBeatConfig.getReaderIdleTimeSeconds()
-                                        , heartBeatConfig.getWriterIdleTimeSeconds()
-                                        , heartBeatConfig.getAllIdleTimeSeconds(), false, DefaultServer.this))
-                                .addLast(new DispatchHandler(processorManager));
-                    }
-                });
-        //-1 代表没有默认端口号
-        ChannelFuture future = port != -1 ? serverBootstrap.bind(port) : serverBootstrap.bind();
-        future.syncUninterruptibly();
-        this.channel = future.channel();
+        if(closed.compareAndSet(true, false)) {
+            serverBootstrap = new ServerBootstrap();
+            final AdminHandler admin = new AdminHandler();
+            clientMap = admin.getClientMap();
+            serverBootstrap.group(bossEventLoopGroup, workerEventLoopGroup).channel(NioServerSocketChannel.class)
+                    .handler(admin)
+                    .childOption(ChannelOption.TCP_NODELAY, true)
+                    .childOption(ChannelOption.SO_REUSEADDR, true)
+                    .childHandler(new ChannelInitializer<Channel>() {
+                        protected void initChannel(Channel channel) throws Exception {
+                            channel.pipeline().addLast("encoder", new LightingEncoder())
+                                    .addLast("decoder", new LightingDecoder())
+                                    .addLast(new HeartBeatHandler(heartBeatConfig.getReaderIdleTimeSeconds()
+                                            , heartBeatConfig.getWriterIdleTimeSeconds()
+                                            , heartBeatConfig.getAllIdleTimeSeconds(), false, DefaultServer.this))
+                                    .addLast(new DispatchHandler(processorManager));
+                        }
+                    });
+            //-1 代表没有默认端口号
+            if(port != -1){
+                serverBootstrap.localAddress(new InetSocketAddress("localhost", port));
+            }else {
+                serverBootstrap.localAddress(new InetSocketAddress("localhost", 8081));
+            }
+            ChannelFuture future = serverBootstrap.bind();
+            future.syncUninterruptibly();
+            this.channel = future.channel();
+        }else {
+            logger.info("服务器已经启动");
+        }
     }
 
     public void shutdownGracefully() {
-        try {
-            if (channel != null) {
-                channel.close();
-            }
-        } catch (Exception e){
-            logger.warn(e.getMessage(), e);
-        }
-        try{
-            Map<Channel, ClientMeta> map = getClientMap();
-            for(Channel temp : map.keySet()){
-                try{
-                    temp.close();
-                }catch (Exception e){
-                    logger.warn(e.getMessage(), e);
+        if(closed.compareAndSet(false, true)) {
+            try {
+                if (channel != null) {
+                    channel.close();
                 }
+            } catch (Exception e) {
+                logger.warn(e.getMessage(), e);
             }
-        }catch (Exception e){
-            logger.warn(e.getMessage(), e);
-        }
-        try {
-            //关闭 group 对象
-            if (serverBootstrap != null) {
-                bossEventLoopGroup.shutdownGracefully();
-                workerEventLoopGroup.shutdownGracefully();
+            try {
+                Map<String, ClientMeta> map = getClientMap();
+                for (Map.Entry<String, ClientMeta> temp : map.entrySet()) {
+                    try {
+                        temp.getValue().getChannel().close();
+                    } catch (Exception e) {
+                        logger.warn(e.getMessage(), e);
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn(e.getMessage(), e);
             }
-        } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
-        }
-        if(clientMap != null) {
-            clientMap.clear();
+            try {
+                //关闭 group 对象
+                if (serverBootstrap != null) {
+                    bossEventLoopGroup.shutdownGracefully();
+                    workerEventLoopGroup.shutdownGracefully();
+                }
+            } catch (Throwable e) {
+                logger.warn(e.getMessage(), e);
+            }
+            if (clientMap != null) {
+                clientMap.clear();
+            }
+        }else {
+            logger.info("服务器正在关闭");
         }
     }
 
@@ -240,7 +258,7 @@ public class DefaultServer implements Server{
         this.serverBootstrap = serverBootstrap;
     }
 
-    public void setClientMap(Map<Channel, ClientMeta> clientMap) {
+    public void setClientMap(Map<String, ClientMeta> clientMap) {
         this.clientMap = clientMap;
     }
 
@@ -252,8 +270,5 @@ public class DefaultServer implements Server{
         this.processorManager = processorManager;
     }
 
-    public void shutdown() {
-
-    }
 
 }

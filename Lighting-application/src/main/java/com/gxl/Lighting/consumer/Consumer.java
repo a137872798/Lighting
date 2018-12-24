@@ -1,8 +1,7 @@
 package com.gxl.Lighting.consumer;
 
 import com.gxl.Lighting.Application;
-import com.gxl.Lighting.meta.RegisterMeta;
-import com.gxl.Lighting.netty.Client;
+import com.gxl.Lighting.netty.meta.RegisterMeta;
 import com.gxl.Lighting.rpc.RPCMeta;
 
 import java.util.List;
@@ -24,6 +23,8 @@ public interface Consumer extends Application {
     void removeSubscribeService(Class<?> o);
 
     void removeSuscribeServices(Class<?>... o);
+
+    void directConnection(String providerAddress);
 
     /**
      * 返回 远程调用生成的代理对象 用户可以根据需要随时强转对象
@@ -51,5 +52,7 @@ public interface Consumer extends Application {
      */
     List<RegisterMeta> getRegisterInfo(String serviceName);
 
-    Client getClient();
+    String getMonitorAddress();
+
+    void setMonitorAddress(String address);
 }

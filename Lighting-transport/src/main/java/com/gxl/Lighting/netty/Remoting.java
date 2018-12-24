@@ -1,6 +1,6 @@
 package com.gxl.Lighting.netty;
 
-import com.gxl.Lighting.rpc.processor.ProcessorManager;
+import com.gxl.Lighting.netty.processor.ProcessorManager;
 
 /**
  * 远程通信接口

@@ -2,22 +2,19 @@ package com.gxl.Lighting;
 
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
-import com.gxl.Lighting.meta.RegisterMeta;
-import com.gxl.Lighting.meta.ServiceMeta;
-import com.gxl.Lighting.meta.SubscribeMeta;
-import com.gxl.Lighting.netty.DefaultServer;
-import com.gxl.Lighting.netty.HeartBeatConfig;
-import com.gxl.Lighting.netty.Server;
-import com.gxl.Lighting.rpc.Listener;
-import com.gxl.Lighting.rpc.RequestEnum;
-import com.gxl.Lighting.rpc.param.RegisterCommandParam;
-import com.gxl.Lighting.rpc.param.SubscribeCommandParam;
-import com.gxl.Lighting.rpc.param.UnRegisterCommandParam;
-import com.gxl.Lighting.rpc.param.UnSubscribeCommandParam;
+import com.gxl.Lighting.netty.*;
+import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
+import com.gxl.Lighting.netty.enums.SerializationEnum;
+import com.gxl.Lighting.netty.meta.RegisterMeta;
+import com.gxl.Lighting.netty.meta.ServiceMeta;
+import com.gxl.Lighting.netty.meta.SubscribeMeta;
+import com.gxl.Lighting.netty.param.*;
 import com.gxl.Lighting.processor.RegisterProcessor;
 import com.gxl.Lighting.processor.SubscributeProcessor;
 import com.gxl.Lighting.processor.UnRegisterProcessor;
 import com.gxl.Lighting.processor.UnSubscributeProcessor;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 
 import java.util.List;
 import java.util.Map;
@@ -48,10 +45,12 @@ public class DefaultRegistry implements Registry {
 
     private final ConcurrentHashSet<SubscribeMeta> subscribes = new ConcurrentHashSet<SubscribeMeta>();
 
+    private static final int DEFAULT_PORT = 102;
+
     /**
      * 监听的是 服务级别 但是订阅的时候 可以一次针对多个 ServiceMeta 进行监听
      */
-    private final ConcurrentMap<ServiceMeta, ConcurrentHashMap<String, NotifyListener>> notifyListeners = new ConcurrentHashMap<ServiceMeta, ConcurrentHashMap<String, NotifyListener>>();
+    private final ConcurrentMap<ServiceMeta, CopyOnWriteArrayList<String>> notifyAddresses = new ConcurrentHashMap<ServiceMeta, CopyOnWriteArrayList<String>>();
 
     /**
      * 每个订阅者下面的 全部注册服务  这里value 必须是 registerMeta 因为 需要 服务的 地址
@@ -65,12 +64,12 @@ public class DefaultRegistry implements Registry {
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
 
     public DefaultRegistry() {
-        server = new DefaultServer();
+        server = new DefaultServer(DEFAULT_PORT);
         init();
     }
 
     public DefaultRegistry(HeartBeatConfig config) {
-        server = new DefaultServer(config);
+        server = new DefaultServer(DEFAULT_PORT, config);
         init();
     }
 
@@ -83,6 +82,7 @@ public class DefaultRegistry implements Registry {
 
     public void start() {
         server.start();
+        logger.info("注册中心启动成功");
     }
 
     //从参数中抽取想要的 变量生成 订阅/注册信息后设置到任务队列中执行任务
@@ -92,6 +92,7 @@ public class DefaultRegistry implements Registry {
         registers.add(meta);
         addRegister(meta);
         DefaultRegistry.this.notify(meta.getServiceMeta());
+        logger.info("成功注册" + param);
     }
 
     /**
@@ -101,13 +102,29 @@ public class DefaultRegistry implements Registry {
      */
     private void notify(ServiceMeta[] serviceMetas) {
         for (ServiceMeta serviceMeta : serviceMetas) {
-            ConcurrentMap<String, NotifyListener> listeners = notifyListeners.get(serviceMeta);
+            List<String> listeners = notifyAddresses.get(serviceMeta);
             if (listeners != null) {
-                for (Map.Entry<String, NotifyListener> temp : listeners.entrySet()) {
-                    String address = temp.getKey();
+                for (String address : listeners) {
                     for (SubscribeMeta subscribute : srInfo.keySet()) {
                         if (subscribute.getAddress().equals(address)) {
-                            temp.getValue().notify(srInfo.get(subscribute));
+                            if (server.getClientMap().get(address) != null) {
+                                ClientMeta client = server.getClientMap().get(address);
+                                NotifyCommandParam param = new NotifyCommandParam();
+                                param.setServices(srInfo.get(subscribute));
+                                Request request = Request.createRequest(RequestEnum.NOTIFY, param);
+                                request.setSerialization(SerializationEnum.JSON.getSerialization());
+                                request.setInvokeType(InvokeTypeEnum.ONEWAY.getInvokeType());
+                                client.getChannel().writeAndFlush(request).addListener(new ChannelFutureListener() {
+                                    @Override
+                                    public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                                        if (channelFuture.cause() == null) {
+                                            logger.info("通知客户端当前可使用的服务提供者");
+                                        }else{
+                                            logger.warn("通知客户端可用服务提供者时 失败");
+                                        }
+                                    }
+                                });
+                            }
                         }
                     }
                 }
@@ -162,6 +179,7 @@ public class DefaultRegistry implements Registry {
         registers.remove(meta);
         removeRegister(meta);
         DefaultRegistry.this.notify(meta.getServiceMeta());
+        logger.info("成功注销" + param);
     }
 
     /**
@@ -172,9 +190,10 @@ public class DefaultRegistry implements Registry {
     public void subscribe(final SubscribeCommandParam param) {
         SubscribeMeta meta = param.getMeta();
         subscribes.add(meta);
-        addListener(meta, param.getListener());
+        addListenerAddress(meta);
         addOldRegister(meta);
         DefaultRegistry.this.notify(meta.getServiceMeta());
+        logger.info("成功订阅" + param);
     }
 
 
@@ -213,20 +232,19 @@ public class DefaultRegistry implements Registry {
      * 为指定服务设置 监听器
      *
      * @param meta
-     * @param listener
      */
-    private void addListener(SubscribeMeta meta, NotifyListener listener) {
+    private void addListenerAddress(SubscribeMeta meta) {
         ServiceMeta[] serviceMetas = meta.getServiceMeta();
         for (ServiceMeta serviceMeta : serviceMetas) {
-            ConcurrentHashMap<String, NotifyListener> listenerMap = new ConcurrentHashMap<String, NotifyListener>();
-            if (!notifyListeners.containsKey(serviceMeta)) {
-                ConcurrentHashMap<String, NotifyListener> old = notifyListeners.putIfAbsent(serviceMeta, listenerMap);
+            CopyOnWriteArrayList<String> listenerAddress = new CopyOnWriteArrayList<>();
+            if (!notifyAddresses.containsKey(serviceMeta)) {
+                CopyOnWriteArrayList<String> old = notifyAddresses.putIfAbsent(serviceMeta, listenerAddress);
                 if (old != null) {
-                    listenerMap = old;
+                    listenerAddress = old;
                 }
-                listenerMap.put(meta.getAddress(), listener);
+                listenerAddress.add(meta.getAddress());
             } else {
-                notifyListeners.get(serviceMeta).put(meta.getAddress(), listener);
+                listenerAddress.add(meta.getAddress());
             }
         }
     }
@@ -237,14 +255,10 @@ public class DefaultRegistry implements Registry {
     private void removeListener(SubscribeMeta meta) {
         ServiceMeta[] serviceMetas = meta.getServiceMeta();
         for (ServiceMeta serviceMeta : serviceMetas) {
-            ConcurrentMap<String, NotifyListener> listener = notifyListeners.get(meta);
-            listener.remove(meta.getAddress());
-            if(listener.size() == 0){
-                notifyListeners.remove(meta);
+            CopyOnWriteArrayList<String> notifyAddress = notifyAddresses.get(meta);
+            notifyAddress.remove(meta.getAddress());
         }
     }
-
-}
 
     /**
      * 取消订阅
@@ -256,6 +270,7 @@ public class DefaultRegistry implements Registry {
         subscribes.remove(meta);
         removeListener(meta);
         removeSubscribute(meta);
+        logger.info("成功取消订阅" + param);
     }
 
     /**

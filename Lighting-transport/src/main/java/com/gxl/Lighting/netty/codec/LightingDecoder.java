@@ -10,7 +10,6 @@ import java.util.List;
 /**
  * Lighting 自带的解码器
  */
-@ChannelHandler.Sharable
 public class LightingDecoder extends ByteToMessageDecoder {
     protected void decode(ChannelHandlerContext channelHandlerContext, ByteBuf byteBuf, List<Object> list) throws Exception {
         LightingCodec.getINSTANCE().decode(channelHandlerContext, byteBuf, list);

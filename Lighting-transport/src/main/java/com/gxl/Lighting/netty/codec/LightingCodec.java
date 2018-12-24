@@ -2,21 +2,19 @@ package com.gxl.Lighting.netty.codec;
 
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
+import com.gxl.Lighting.netty.*;
 import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
 import com.gxl.Lighting.netty.enums.SerializationEnum;
 import com.gxl.Lighting.netty.heartbeat.HeartBeat;
+import com.gxl.Lighting.netty.param.*;
 import com.gxl.Lighting.netty.serialization.Serialization;
 import com.gxl.Lighting.netty.serialization.SerializationFactory;
-import com.gxl.Lighting.rpc.CommandParam;
-import com.gxl.Lighting.rpc.Request;
-import com.gxl.Lighting.rpc.RequestEnum;
-import com.gxl.Lighting.rpc.Response;
-import com.gxl.Lighting.rpc.param.*;
 import com.gxl.Lighting.util.BytesUtil;
 import com.gxl.Lighting.util.StringUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.CodecException;
+import io.netty.handler.codec.DecoderException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -34,9 +32,9 @@ public class LightingCodec {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(LightingCodec.class);
 
-    private static volatile LightingCodec INSTANCE;
+    private static LightingCodec INSTANCE = new LightingCodec();
 
-    /**
+    /**serialize
      * 请求头长度
      */
     private static final int HEADER_LENGTH = 16;
@@ -72,9 +70,6 @@ public class LightingCodec {
     private LightingCodec(){ }
 
     public static LightingCodec getINSTANCE(){
-        if(INSTANCE == null){
-            INSTANCE = new LightingCodec();
-        }
         return INSTANCE;
     }
 
@@ -147,8 +142,9 @@ public class LightingCodec {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         serialization.serialize(out, response.getResult());
         byte[] body = out.toByteArray();
+        out.close();
         byteBuf.writeBytes(body);
-        int bodySize = byteBuf.readableBytes();
+        int bodySize = body.length;
 
         BytesUtil.int2byte(bodySize, header, 12);
         byteBuf.writerIndex(saveIndex);
@@ -183,8 +179,9 @@ public class LightingCodec {
         //创建输出流 方便序列化工具将 对象 写入
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         //只需要序列化command  这样传输速度快
-        serialization.serialize(out, request.getCommand());
+        serialization.serialize(out, request.getParam());
         byte[] body = out.toByteArray();
+        out.close();
         byteBuf.writeBytes(body);
         int bodySize = byteBuf.readableBytes();
 
@@ -232,12 +229,16 @@ public class LightingCodec {
         String serialization = response.getSerialization();
         byte flag = SerializationEnum.getValue(serialization);
         if(flag == -1){
-            logger.warn("没有找到与"+serialization+"对应的序列化方式, 默认使用json 进行序列化");
-            flag = LightingCodec.getJSON();
+            throw new DecoderException("没有找到与"+serialization+"对应的序列化方式");
         }
 
-        //响应对象不需要设置 请求方式
-        flag |= REQUEST;
+        String invokeType = response.getInvokeType();
+        byte invokeFlag = InvokeTypeEnum.getValue(invokeType);
+        if(invokeFlag == -1){
+            throw new DecoderException("没有找到与" + invokeType + "对应的invoke方式");
+        }
+        flag |= invokeFlag;
+        flag |= RESPONSE;
         return flag;
     }
 
@@ -262,7 +263,7 @@ public class LightingCodec {
         }
         int bodySize = BytesUtil.bytes2int(header, 12);
         //本次长度 不足以完全解析一个数据包
-        if(byteBuf.readableBytes() < HEADER_LENGTH + bodySize){
+        if(byteBuf.readableBytes() < bodySize){
             //指针归位 保证下次解析正常
             byteBuf.readerIndex(saveIndex);
             return;
@@ -274,11 +275,11 @@ public class LightingCodec {
         byteBuf.readBytes(body);
 
         Object result = null;
-        if((header[2] & REQUEST) != 1){
+        if((header[2] & REQUEST) == REQUEST){
             result = decodeRequest(ctx, byteBuf, list, header, body);
-        } else if((header[2] & RESPONSE) != 1){
+        } else if((header[2] & RESPONSE) == RESPONSE){
             result = decodeResponse(ctx, byteBuf, list, header, body);
-        } else if((header[2] & HEARTBEAT) != 1){
+        } else if((header[2] & HEARTBEAT) == HEARTBEAT){
             result = HeartBeat.createHeartBeat();
         }
         list.add(result);
@@ -295,11 +296,16 @@ public class LightingCodec {
     private Object decodeResponse(ChannelHandlerContext ctx, ByteBuf byteBuf, List<Object> list, byte[] header, byte[] body) throws IOException{
         String serializationType = decodeSerialization(header[2]);
         Serialization serialization = SerializationFactory.newInstance(serializationType);
-        Object result = serialization.deserialize(new ByteArrayInputStream(body), body.length);
-        if(!(result instanceof Response)){
-            throw new CodecException("解码异常");
-        }
-        return result;
+        long id = decodeId(header);
+        Result result = serialization.deserialize(new ByteArrayInputStream(body), body.length, Result.class);
+        Response response = new Response(id);
+        response.setResult(result);
+        response.setSerialization(serializationType);
+        return response;
+    }
+
+    private long decodeId(byte[] header) {
+        return BytesUtil.bytes2long(header, 4);
     }
 
 
@@ -338,13 +344,12 @@ public class LightingCodec {
         Serialization serialization = SerializationFactory.newInstance(serializationType);
         CommandParam param = decodeCommand(header, body, serialization);
         String invokeType = decodeInvokeType(header[2]);
-
-        Request request = Request.createRequest(RequestEnum.indexOf(header[3]), param);
+        Request request = Request.createRequest(RequestEnum.indexOf(header[3]), param, decodeId(header));
         request.setSerialization(serializationType);
-        request.setCommand(RequestEnum.indexOf(header[3]).ordinal());
-        request.set
         request.setInvokeType(invokeType);
-        return result;
+        request.setParam(param);
+        request.setCommand(header[3]);
+        return request;
     }
 
     /**
@@ -358,21 +363,26 @@ public class LightingCodec {
         byte b = header[3];
         RequestEnum requestEnum =  RequestEnum.indexOf(b);
         CommandParam result = null;
+        ByteArrayInputStream in = new ByteArrayInputStream(body);
         if(requestEnum == RequestEnum.INVOKE){
-            result = serialization.deserialize(new ByteArrayInputStream(body), body.length, InvokerCommandParam.class);
+            result = serialization.deserialize(in, body.length, InvokeCommandParam.class);
         }
         if(requestEnum == RequestEnum.UNREGISTRY){
-            result = serialization.deserialize(new ByteArrayInputStream(body), body.length, UnRegisterCommandParam.class);
+            result = serialization.deserialize(in, body.length, UnRegisterCommandParam.class);
         }
         if(requestEnum == RequestEnum.REGISTRY){
-            result = serialization.deserialize(new ByteArrayInputStream(body), body.length, RegisterCommandParam.class);
+            result = serialization.deserialize(in, body.length, RegisterCommandParam.class);
         }
         if(requestEnum == RequestEnum.SUBSCRIBE){
-            result = serialization.deserialize(new ByteArrayInputStream(body), body.length, SubscribeCommandParam.class);
+            result = serialization.deserialize(in, body.length, SubscribeCommandParam.class);
         }
         if(requestEnum == RequestEnum.UNSUBSCRIBE){
-            result = serialization.deserialize(new ByteArrayInputStream(body), body.length, UnSubscribeCommandParam.class);
+            result = serialization.deserialize(in, body.length, UnSubscribeCommandParam.class);
         }
+        if(requestEnum == RequestEnum.NOTIFY){
+            result = serialization.deserialize(in, body.length, NotifyCommandParam.class);
+        }
+        in.close();
         return result;
     }
 

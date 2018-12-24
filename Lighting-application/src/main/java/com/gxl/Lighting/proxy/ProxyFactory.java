@@ -1,6 +1,7 @@
 package com.gxl.Lighting.proxy;
 
 import com.gxl.Lighting.rpc.RPCInvocation;
+import com.gxl.Lighting.rpc.RPCInvocationHanlder;
 
 import java.lang.reflect.Proxy;
 

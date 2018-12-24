@@ -1,7 +1,5 @@
 package com.gxl.Lighting.netty;
 
-import com.gxl.Lighting.meta.SubscribeMeta;
-import com.gxl.Lighting.rpc.*;
 import io.netty.channel.Channel;
 
 import java.util.Map;

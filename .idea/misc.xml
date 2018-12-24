@@ -11,7 +11,11 @@
     </option>
     <option name="ignoredFiles">
       <set>
+        <option value="$PROJECT_DIR$/Lighting-cluster/pom.xml" />
         <option value="$PROJECT_DIR$/Lighting-common/pom.xml" />
+        <option value="$PROJECT_DIR$/Lighting-monitor/pom.xml" />
+        <option value="$PROJECT_DIR$/Lighting-proxy/pom.xml" />
+        <option value="$PROJECT_DIR$/Lighting-rpc/pom.xml" />
       </set>
     </option>
   </component>

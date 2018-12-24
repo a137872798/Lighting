@@ -1,23 +1,16 @@
 package com.gxl.Lighting.provider;
 
-import com.gxl.Lighting.ConcurrentHashSet;
 import com.gxl.Lighting.NamedThreadFactory;
-import com.gxl.Lighting.Version;
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
-import com.gxl.Lighting.meta.RegisterMeta;
-import com.gxl.Lighting.netty.Client;
-import com.gxl.Lighting.netty.DefaultClient;
-import com.gxl.Lighting.netty.DefaultServer;
-import com.gxl.Lighting.netty.Server;
+import com.gxl.Lighting.netty.meta.RegisterMeta;
+import com.gxl.Lighting.netty.*;
 import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
 import com.gxl.Lighting.netty.enums.SerializationEnum;
 import com.gxl.Lighting.provider.processor.InvokerProcessor;
 import com.gxl.Lighting.proxy.Invoker;
-import com.gxl.Lighting.rpc.*;
-import com.gxl.Lighting.rpc.param.RegisterCommandParam;
-import com.gxl.Lighting.rpc.param.UnRegisterCommandParam;
-import com.gxl.Lighting.util.AddressUtil;
+import com.gxl.Lighting.netty.param.RegisterCommandParam;
+import com.gxl.Lighting.netty.param.UnRegisterCommandParam;
 import com.gxl.Lighting.util.StringUtil;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timeout;
@@ -25,9 +18,7 @@ import io.netty.util.Timer;
 import io.netty.util.TimerTask;
 
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -49,8 +40,6 @@ public class DefaultProvider implements Provider {
 
     private Server vipServer;
 
-    private String monitorAddress;
-
     private String[] registryAddresses;
 
     /**
@@ -70,7 +59,7 @@ public class DefaultProvider implements Provider {
      */
     private long registerTimeout;
 
-    private static final long DEFAULT_REGISTERTIMEOUT = 1000;
+    private static final long DEFAULT_REGISTERTIMEOUT = 10000;
     /**
      * 重连到注册中心的 时间间隔
      */
@@ -80,6 +69,8 @@ public class DefaultProvider implements Provider {
      * 封装了调用服务实现类的逻辑
      */
     private Invoker invoker;
+
+    private List<Object> refs = new CopyOnWriteArrayList<>();
 
     /**
      * 该服务提供者 暴露的服务
@@ -95,20 +86,20 @@ public class DefaultProvider implements Provider {
 
     private final TimerTask republishTask = new TimerTask() {
         public void run(Timeout timeout) throws Exception {
-        String registryAddress = getFailRegistryAddress().take();
-        if(start.get()) {
-            doPublishAsync(registryAddress);
-            timer.newTimeout(this, republishInterval, TimeUnit.MILLISECONDS);
-        }
+            String registryAddress = getFailRegistryAddress().take();
+            if (start.get()) {
+                doPublishAsync(registryAddress);
+                timer.newTimeout(this, republishInterval, TimeUnit.MILLISECONDS);
+            }
         }
     };
 
     private final Callback republishCallback = new Callback() {
         public void callback(ResponseFuture future) {
-        //当失败时  重新将任务 添加到 队列中 这样定时器还能继续触发
-        if (!future.getResponse().isSuccess()) {
-            DefaultProvider.this.getFailRegistryAddress().add(future.getRemoteAddress());
-        }
+            //当失败时  重新将任务 添加到 队列中 这样定时器还能继续触发
+            if (!future.getResponse().getResult().isSuccess()) {
+                DefaultProvider.this.getFailRegistryAddress().add(future.getRemoteAddress());
+            }
         }
     };
 
@@ -128,7 +119,7 @@ public class DefaultProvider implements Provider {
         client.invokeAsync(registryAddress, request, republishCallback, registerTimeout);
     }
 
-    public DefaultProvider(){
+    public DefaultProvider() {
         this(DEFAULT_REGISTERTIMEOUT);
     }
 
@@ -136,9 +127,11 @@ public class DefaultProvider implements Provider {
         this.registerTimeout = registerTimeout;
         client = new DefaultClient();
         server = new DefaultServer(DEFAULT_PORT);
+        logger.info("提供者启动成功");
         vipServer = new DefaultServer(VIP_PORT);
-        server.getProcessorManager().registerProcessor(RequestEnum.INVOKE, new InvokerProcessor());
-        vipServer.getProcessorManager().registerProcessor(RequestEnum.INVOKE, new InvokerProcessor());
+        logger.info("vip提供者启动成功");
+        server.getProcessorManager().registerProcessor(RequestEnum.INVOKE, new InvokerProcessor(this));
+        vipServer.getProcessorManager().registerProcessor(RequestEnum.INVOKE, new InvokerProcessor(this));
         timer = new HashedWheelTimer(new NamedThreadFactory("providerRepublish", true), republishInterval, TimeUnit.MILLISECONDS);
         timer.newTimeout(republishTask, republishInterval, TimeUnit.MILLISECONDS);
     }
@@ -146,13 +139,28 @@ public class DefaultProvider implements Provider {
 
     private String createServiceName(List<Class<?>> exports) {
         String[] serviceNames = new String[exports.size()];
-        for(int i = 0 ;i < exports.size(); i++){
-            serviceNames[i] = exports.get(i).getSimpleName();
+        for (int i = 0; i < exports.size(); i++) {
+            if (exports.get(i).getInterfaces().length == 0) {
+                throw new IllegalArgumentException("传入错误的 服务提供类");
+            }
+            serviceNames[i] = exports.get(i).getInterfaces()[0].getSimpleName();
         }
         return StringUtil.join(serviceNames, ",");
     }
 
     //每次 发布 必须是 提供者 处于停止 状态  可以做成热部署 但是在并发情况下会有很多发布请求吧 这样不知道是否合适
+
+    @Override
+    public void setRef(Object object) {
+        this.refs.add(object);
+    }
+
+    @Override
+    public void setRefs(Object... objects) {
+        for(Object o : objects){
+            this.refs.add(o);
+        }
+    }
 
     public void addPublishService(Class<?> o) {
         if (start.get()) {
@@ -167,7 +175,7 @@ public class DefaultProvider implements Provider {
             logger.warn("服务提供者已经启动，请先停止提供者再发布新服务");
             return;
         }
-        for(Class<?> clazz : o){
+        for (Class<?> clazz : o) {
             exports.add(clazz);
         }
     }
@@ -186,7 +194,7 @@ public class DefaultProvider implements Provider {
             logger.warn("服务提供者已经启动，请先停止提供者");
             return;
         }
-        for(Class<?> clazz : o){
+        for (Class<?> clazz : o) {
             exports.remove(clazz);
         }
     }
@@ -194,14 +202,14 @@ public class DefaultProvider implements Provider {
     /**
      * 发布
      */
-    public void publish() throws UnknownHostException {
+    public void publish() {
         if (start.compareAndSet(false, true)) {
-            if (checkParam(monitorAddress, registryAddresses, exports)) {
+            if (checkParam(registryAddresses, exports)) {
                 invoker = createInvoker();
                 server.start();
                 vipServer.start();
-                String address = StringUtil.join(new String[]{InetAddress.getLocalHost()
-                        .getHostAddress(),String.valueOf(DEFAULT_PORT)},":");
+                String address = null;
+                address = StringUtil.join(new String[]{"127.0.0.1", String.valueOf(DEFAULT_PORT)}, ":");
                 serviceName = createServiceName(exports);
 
                 meta = RegisterMeta.newMeta(exports, address);
@@ -249,7 +257,6 @@ public class DefaultProvider implements Provider {
     }
 
     public void reset() {
-        monitorAddress = null;
         registryAddresses = null;
         exports.clear();
     }
@@ -268,7 +275,8 @@ public class DefaultProvider implements Provider {
         Response response = null;
         try {
             response = client.invokeSync(registryAddress, request, registerTimeout);
-            return response.isSuccess();
+            return response.getResult().isSuccess();
+//            return true;
         } catch (InterruptedException e) {
             e.printStackTrace();
         } catch (RemotingSendException e) {
@@ -293,7 +301,7 @@ public class DefaultProvider implements Provider {
         Response response = null;
         try {
             response = client.invokeSync(registryAddress, request, 3);
-            return response.isSuccess();
+            return response.getResult().isSuccess();
         } catch (InterruptedException e) {
             e.printStackTrace();
         } catch (RemotingSendException e) {
@@ -312,22 +320,17 @@ public class DefaultProvider implements Provider {
 //    }
 
     private Invoker createInvoker() {
-        return new Invoker(exports);
+        return new Invoker(exports,refs);
     }
 
     /**
      * 启动服务前 检测 服务是否允许正常启动
      *
-     * @param monitorAddress
      * @param registryAddresses
      * @param exports
      */
-    private boolean checkParam(String monitorAddress, String[] registryAddresses, List<Class<?>> exports) {
-        if (StringUtil.isEmpty(monitorAddress)) {
-            logger.info("没有设置监控中心的地址 无法启动");
-            return false;
-        }
-        if (registryAddresses.length == 0 || registryAddresses == null) {
+    private boolean checkParam(String[] registryAddresses, List<Class<?>> exports) {
+        if (registryAddresses == null || registryAddresses.length == 0) {
             logger.info("没有设置注册中心的地址 无法启动");
             return false;
         }
@@ -343,15 +346,7 @@ public class DefaultProvider implements Provider {
     }
 
     public void setRegistryAddresses(String[] addresses) {
-        this.registryAddresses = registryAddresses;
-    }
-
-    public String getMonitorAddress() {
-        return monitorAddress;
-    }
-
-    public void setMonitorAddress(String address) {
-        this.monitorAddress = monitorAddress;
+        this.registryAddresses = addresses;
     }
 
     public BlockingQueue<String> getFailRegistryAddress() {
@@ -360,14 +355,6 @@ public class DefaultProvider implements Provider {
 
     public void setFailRegistryAddress(BlockingQueue<String> failRegistryAddress) {
         this.failRegistryAddress = failRegistryAddress;
-    }
-
-    public Timer getTimer() {
-        return timer;
-    }
-
-    public void setTimer(Timer timer) {
-        this.timer = timer;
     }
 
     public long getRegisterTimeout() {
@@ -388,10 +375,6 @@ public class DefaultProvider implements Provider {
 
     public Invoker getInvoker() {
         return invoker;
-    }
-
-    public void setInvoker(Invoker invoker) {
-        this.invoker = invoker;
     }
 
     public List<Class<?>> getExports() {

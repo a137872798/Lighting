@@ -5,10 +5,8 @@ import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
 import com.gxl.Lighting.netty.codec.LightingDecoder;
 import com.gxl.Lighting.netty.codec.LightingEncoder;
-import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
 import com.gxl.Lighting.netty.heartbeat.HeartBeatHandler;
-import com.gxl.Lighting.rpc.*;
-import com.gxl.Lighting.rpc.processor.ProcessorManager;
+import com.gxl.Lighting.netty.processor.ProcessorManager;
 import com.gxl.Lighting.util.StringUtil;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -73,16 +71,16 @@ public class DefaultClient implements Client {
      * 定时清理 response 对象
      */
     private final TimerTask cleanTask = new TimerTask() {
-        public void run(Timeout timeout){
+        public void run(Timeout timeout) throws RemotingException {
 
-            for(Map.Entry<Long, ResponseFuture> entry : responseTable.entrySet()){
-                if(entry.getValue().getTimeout() + entry.getValue().getBeginTime() <= System.currentTimeMillis()){
-                    if(entry.getValue().getCallback() != null){
+            for (Map.Entry<Long, ResponseFuture> entry : responseTable.entrySet()) {
+                if (entry.getValue().getTimeout() + entry.getValue().getBeginTime() < System.currentTimeMillis()) {
+                    if (entry.getValue().getCallback() != null) {
                         //触发 异步超时的 异常
                         Response response = new Response(entry.getKey());
-                        response.setSuccess(false);
-                        response.setErrorMsg("请求超时");
-                        response.setCause(new RemotingTimeoutException("请求超时"));
+                        response.getResult().setSuccess(false);
+                        response.getResult().setErrorMsg("请求超时");
+                        response.getResult().setCause(new RemotingTimeoutException("请求超时"));
                         Callback callback = entry.getValue().getCallback();
                         callback.callback(entry.getValue());
                     } else {
@@ -155,6 +153,7 @@ public class DefaultClient implements Client {
             });
             ChannelFuture future = bootstrap.connect();
             if (future.awaitUninterruptibly().isSuccess()) {
+                logger.info("连接到{}成功", address + ":" + String.valueOf(port));
                 channelTable.put(address + ":" + String.valueOf(port), future.channel());
             } else {
                 logger.warn("连接到{}失败", address);
@@ -164,6 +163,7 @@ public class DefaultClient implements Client {
 
     /**
      * 异步调用
+     *
      * @param address
      * @param request
      * @param callback
@@ -177,13 +177,13 @@ public class DefaultClient implements Client {
             connect(addresses[0], Integer.valueOf(addresses[1]));
             channel = channelTable.get(address);
         }
-        final ResponseFuture future = new ResponseFuture(request.getId(),callback,timeout);
+        final ResponseFuture future = new ResponseFuture(request.getId(), callback, timeout);
         future.setRemoteAddress(address);
         responseTable.put(request.getId(), future);
         channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
             public void operationComplete(ChannelFuture channelFuture) throws Exception {
-                if(channelFuture.isSuccess()){
-                   future.setSendSuccess(true);
+                if (channelFuture.isSuccess()) {
+                    future.setSendSuccess(true);
                 } else {
                     reqeustFail(request.getId());
                 }
@@ -193,16 +193,17 @@ public class DefaultClient implements Client {
 
     /**
      * 在异步调用时 处理 发送失败的情况
+     *
      * @param id
      */
-    private void reqeustFail(long id) {
+    private void reqeustFail(long id) throws RemotingException {
         final ResponseFuture future = responseTable.get(id);
-        if(future != null){
+        if (future != null) {
             future.setSendSuccess(false);
             Response response = new Response(id);
-            response.setSuccess(false);
-            response.setErrorMsg("请求超时");
-            response.setCause(new RemotingTimeoutException("请求超时"));
+            response.getResult().setSuccess(false);
+            response.getResult().setErrorMsg("请求超时");
+            response.getResult().setCause(new RemotingTimeoutException("请求超时"));
             future.getCallback().callback(future);
         }
     }
@@ -216,8 +217,9 @@ public class DefaultClient implements Client {
      * @return
      */
     public Response invokeSync(final String address, final Request request, long timeout) throws
-            RemotingSendException, RemotingTimeoutException{
+            RemotingSendException, RemotingTimeoutException {
         long startTime = System.currentTimeMillis();
+        logger.info("本次请求的开始时间是" + startTime);
         Channel channel = channelTable.get(address);
         if (channel == null) {
             logger.warn("没有找到{}对应的通道对象 现在开始连接", address);
@@ -231,14 +233,14 @@ public class DefaultClient implements Client {
         responseTable.put(request.getId(), future);
         channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
             public void operationComplete(ChannelFuture channelFuture) throws Exception {
-                if(!channelFuture.isSuccess()){
+                if (!channelFuture.isSuccess()) {
                     //这里代表写入就 失败了 直接返回 response
                     future.setSendSuccess(false);
                     responseTable.remove(request.getId());
                     logger.warn("往{}发送{}时失败", address, request.toString());
                     future.setCause(channelFuture.cause());
                     future.setResponse(null);
-                }else {
+                } else {
                     future.setSendSuccess(true);
                     logger.debug("往{}发送{}成功,等待结果", address, request.toString());
                 }
@@ -249,18 +251,22 @@ public class DefaultClient implements Client {
         //超时时 后台线程也会往这里设置 空结果
         long currentTime = System.currentTimeMillis();
         timeout = timeout - currentTime + startTime;
+        future.setTimeout(timeout);
+        logger.info("本次请求剩余时间为" + timeout);
         Response response = future.waitResponseUnInterrupt(timeout, TimeUnit.MILLISECONDS);
         responseTable.remove(future.getId());
-        if(response == null){
-            if(future.isSendSuccess()){
+        if (response == null) {
+            if (future.isSendSuccess()) {
                 throw new RemotingTimeoutException("请求" + address + "超时");
-            } throw new RemotingSendException("发送数据时失败" + future.getCause());
+            }
+            throw new RemotingSendException("发送数据时失败" + future.getCause());
         }
         return response;
     }
 
     /**
      * 单向发送 不需要结果
+     *
      * @param address
      * @param request
      */
@@ -303,12 +309,10 @@ public class DefaultClient implements Client {
     }
 
     public void shutdownGracefully() {
-        if(closed.compareAndSet(false, true)) {
-            timer.stop();
-            cleanTimer.stop();
-            workerGroup.shutdownGracefully();
-            logger.info("关闭客户端");
-        }
+        timer.stop();
+        cleanTimer.stop();
+        workerGroup.shutdownGracefully();
+        logger.info("关闭客户端");
     }
 
     public ProcessorManager getProcessorManager() {
@@ -340,7 +344,7 @@ public class DefaultClient implements Client {
         return channelTable;
     }
 
-    public boolean isShutdown(){
+    public boolean isShutdown() {
         return closed.get();
     }
 }

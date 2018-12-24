@@ -16,7 +16,7 @@ public class StringUtil {
     }
 
     public static String join(String[] strs, String split){
-        StringBuilder sb = null;
+        StringBuilder sb = new StringBuilder();
         for(int i = 0; i < strs.length; i++){
             if(i == 0){
                 sb.append(strs[0]);

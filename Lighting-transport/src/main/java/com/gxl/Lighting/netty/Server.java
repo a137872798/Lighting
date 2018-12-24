@@ -18,5 +18,5 @@ public interface Server extends Remoting{
      * 获取 该服务器维护的 所有客户端channel
      * @return
      */
-    Map<Channel, ClientMeta> getClientMap();
+    Map<String, ClientMeta> getClientMap();
 }

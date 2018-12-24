@@ -36,7 +36,7 @@ public enum InvokeTypeEnum {
 
     public static String getValue(byte b){
         for(InvokeTypeEnum temp : InvokeTypeEnum.values()){
-            if((temp.getFlag() & b ) == 1){
+            if((temp.getFlag() & b ) == temp.getFlag()){
                 return temp.getInvokeType();
             }
         }

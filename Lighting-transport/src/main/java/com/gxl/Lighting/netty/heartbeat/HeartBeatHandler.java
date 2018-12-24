@@ -4,7 +4,7 @@ import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
 import com.gxl.Lighting.netty.ClientMeta;
 import com.gxl.Lighting.netty.Server;
-import com.gxl.Lighting.rpc.Request;
+import com.gxl.Lighting.util.AddressUtil;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -12,6 +12,7 @@ import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 
+import java.net.InetSocketAddress;
 import java.util.Map;
 
 /**
@@ -59,9 +60,11 @@ public class HeartBeatHandler extends IdleStateHandler {
             //因为 write 直接去了 上个节点 就无法触发本节点的 write 了 然后父类 在write 中 更新了 LastWriteTime 必须要触发这个
             //netty 的write 返回的 future 无法标记 当写入JDK channel 失败时 的状态  不能通过这种方式判断是否重连
             //直接在 客户端最外层进行重连就可以了
+            logger.info("发送心跳包");
             ctx.pipeline().write(HeartBeat.createHeartBeat());
         }
         //All事件 不处理了 上面2种已经概括全部可能了
+        ctx.fireUserEventTriggered(evt);
     }
 
     /**
@@ -71,13 +74,15 @@ public class HeartBeatHandler extends IdleStateHandler {
      */
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-        Map<Channel, ClientMeta> map = server.getClientMap();
-        ClientMeta meta = map.get(ctx);
-        if(meta == null){
-            throw new NullPointerException("在服务器上找不到 地址为" + ctx.channel().remoteAddress() + "的客户端");
+        if(!isClient) {
+            Map<String, ClientMeta> map = server.getClientMap();
+            ClientMeta meta = map.get(AddressUtil.socketAddressToAddress((InetSocketAddress) ctx.channel().remoteAddress()));
+            if (meta == null) {
+                throw new NullPointerException("在服务器上找不到 地址为" + ctx.channel().remoteAddress() + "的客户端");
+            }
+            //读取成功重置
+            meta.setHeartBeatTimes(0);
         }
-        //读取成功重置
-        meta.setHeartBeatTimes(0);
 
         super.channelReadComplete(ctx);
     }
