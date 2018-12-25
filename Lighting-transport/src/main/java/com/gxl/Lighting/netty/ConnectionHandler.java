@@ -2,6 +2,7 @@ package com.gxl.Lighting.netty;
 
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
+import com.gxl.Lighting.util.AddressUtil;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -81,17 +82,21 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter implements T
     public void run(final Timeout timeout) throws Exception {
         if(!client.isShutdown()) {
             synchronized (client.getBootstrap()) {
-                final ChannelFuture future = client.getBootstrap().connect(address);
+                if(!client.isShutdown() && !client.channelTable().get(AddressUtil.socketAddressToAddress((InetSocketAddress) address)).isActive()) {
+                    final ChannelFuture future = client.getBootstrap().connect(address);
 
-                future.addListener(new ChannelFutureListener() {
-                    public void operationComplete(ChannelFuture channelFuture) throws Exception {
-                        boolean succeed = channelFuture.isSuccess();
-                        logger.warn("重连到{}成功{}", address, succeed ? true : false);
-                        if (!succeed) {
-                            channelFuture.channel().pipeline().fireChannelInactive();
+                    future.addListener(new ChannelFutureListener() {
+                        public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                            boolean succeed = channelFuture.isSuccess();
+                            logger.warn("重连到{}成功", address);
+                            if (!succeed) {
+                                logger.warn("重连到{}失败,短暂延时后会继续重连", address);
+
+                                channelFuture.channel().pipeline().fireChannelInactive();
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
         }
     }

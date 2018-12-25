@@ -146,7 +146,6 @@ public class DefaultServer implements Server{
     private void ifReconnect(final ClientMeta meta) {
         heartBeatTimes.putIfAbsent(meta, 0);
         Integer maxHeartBeatTimes = heartBeatTimes.get(meta);
-        if(maxHeartBeatTimes == null)
         if(meta.getHeartBeatTimes() >= maxHeartBeatTimes){
             logger.info("地址为" + meta.getAddress() + "的客户端对象 因为长时间未响应 已经断开了与该客户端的连接");
             meta.getChannel().close().addListener(new ChannelFutureListener() {

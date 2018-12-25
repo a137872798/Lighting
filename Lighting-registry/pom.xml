@@ -15,7 +15,6 @@
             <groupId>com.gxl.lighting</groupId>
             <artifactId>Lighting-logging</artifactId>
             <version>1.0-SNAPSHOT</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.gxl.lighting</groupId>
@@ -28,23 +27,6 @@
             <artifactId>Lighting-common</artifactId>
             <version>1.0-SNAPSHOT</version>
             <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.gxl.lighting</groupId>
-            <artifactId>Lighting-common</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.gxl.lighting</groupId>
-            <artifactId>Lighting-application</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.gxl.lighting</groupId>
-            <artifactId>Lighting-common</artifactId>
-            <version>1.0-SNAPSHOT</version>
         </dependency>
     </dependencies>
 

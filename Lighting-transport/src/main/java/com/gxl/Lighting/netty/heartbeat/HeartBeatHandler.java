@@ -53,7 +53,9 @@ public class HeartBeatHandler extends IdleStateHandler {
     @Override
     protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
         //代表服务器 很久没有读取到数据  因为是个 后台定时任务 只要客户端没有发送新的请求 lastReadTime 不会被更新 那么 就会继续触发该事件
+        //这里应该是多线程场景 因为 触发的线程是 上层的 定时器
         if(evt.state() == IdleState.READER_IDLE && !isClient){
+            logger.info("服务器端进行心跳检测");
             server.addHeartBeatTimes(ctx.channel());
         }
         if(evt.state() == IdleState.WRITER_IDLE && isClient){
