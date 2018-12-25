@@ -32,9 +32,9 @@ public class DefaultProvider implements Provider {
      */
     private Client client;
 
-    private static final int DEFAULT_PORT = 8080;
+    private static final int DEFAULT_PORT = 8082;
 
-    private static final int VIP_PORT = 8082;
+    private static final int VIP_PORT = 8084;
 
     private Server server;
 
@@ -59,7 +59,7 @@ public class DefaultProvider implements Provider {
      */
     private long registerTimeout;
 
-    private static final long DEFAULT_REGISTERTIMEOUT = 10000;
+    private static final long DEFAULT_REGISTERTIMEOUT = 3000;
     /**
      * 重连到注册中心的 时间间隔
      */

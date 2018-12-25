@@ -45,8 +45,7 @@ public class DefaultConsumer implements Consumer {
     /**
      * 获取到的 服务提供者信息
      */
-    private ConcurrentMap<String, CopyOnWriteArrayList<RegisterMeta>> registerInfo =
-            new ConcurrentHashMap<String, CopyOnWriteArrayList<RegisterMeta>>();
+    private ConcurrentMap<String, CopyOnWriteArrayList<RegisterMeta>> registerInfo = new ConcurrentHashMap<String, CopyOnWriteArrayList<RegisterMeta>>();
 
     /**
      * 连接到 注册中心 和  服务提供者的 客户端
@@ -72,7 +71,7 @@ public class DefaultConsumer implements Consumer {
      */
     private long subscribeTimeout;
 
-    private static final long DEFAULT_SUBSCRIBETIMEOUT = 50000;
+    private static final long DEFAULT_SUBSCRIBETIMEOUT = 3000;
 
     /**
      * 这个是 动态代理对象 用户调用后 就会自动发起请求
@@ -176,22 +175,15 @@ public class DefaultConsumer implements Consumer {
                 serviceName = serviceName();
 
                 //开始向注册中心订阅服务
-//                boolean atLeastSuccess = false;
                 for (String registryAddress : registryAddresses) {
                     boolean registerResult = doSubscribute(registryAddress);
                     if (registerResult) {
                         logger.warn("在地址为{}的注册中心成功订阅服务", registryAddress);
-//                        atLeastSuccess = true;
                     } else {
                         logger.warn("到注册中心订阅服务失败, 在后台开启重连任务");
                         failRegistryAddress.add(registryAddress);
                     }
                 }
-//                if (atLeastSuccess) {
-//                    Class<?>[] interfaces = getArray(services);
-//                    //生成动态代理对象
-//                    service  = ProxyFactory.getProxy(new DefaultRPCInvocation(this), interfaces);
-//                }
             } else {
                 start.set(false);
             }
@@ -427,9 +419,9 @@ public class DefaultConsumer implements Consumer {
     }
 
     public Object getService() {
-        if(service == null){
+        if (service == null) {
             Class<?>[] interfaces = getArray(services);
-            service  = ProxyFactory.getProxy(new DefaultRPCInvocation(this), interfaces);
+            service = ProxyFactory.getProxy(new DefaultRPCInvocation(this), interfaces);
         }
         return service;
     }

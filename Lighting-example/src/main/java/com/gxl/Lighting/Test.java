@@ -25,10 +25,11 @@ public class Test {
         registry.start();
         provider.publish();
         consumer.subscribe();
-        //需要等待 各个组件启动完毕 并发送数据后才能启动
-        Thread.sleep(3000);
         Human human = (Human)consumer.getService();
         System.out.println(human.sayHello("你好"));
+        //模拟程序一直处在运行的状态
+        for(;;){
 
+        }
     }
 }

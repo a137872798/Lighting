@@ -278,7 +278,16 @@ public class DefaultClient implements Client {
             connect(addresses[0], Integer.valueOf(addresses[1]));
             channel = channelTable.get(address);
         }
-        channel.writeAndFlush(request);
+        channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                if(channelFuture.isSuccess()){
+                    logger.info("成功将数据发送到监控中心");
+                } else {
+                    logger.info("发送数据到监控中心时失败，原因是" + channelFuture.cause());
+                }
+            }
+        });
     }
 
     private void init() {

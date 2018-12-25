@@ -382,6 +382,9 @@ public class LightingCodec {
         if(requestEnum == RequestEnum.NOTIFY){
             result = serialization.deserialize(in, body.length, NotifyCommandParam.class);
         }
+        if(requestEnum == RequestEnum.COLLECT){
+            result = serialization.deserialize(in, body.length, CollectCommandParam.class);
+        }
         in.close();
         return result;
     }

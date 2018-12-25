@@ -34,6 +34,12 @@ public class FastJsonSerialization implements Serialization{
         in.read(body);
         String json = new String(body, "UTF-8");
         logger.debug("反序列化的json是" + json);
+        //这个是 测试 client 端的 定时任务清理机制是否健全
+//        try {
+//            Thread.sleep(4000);
+//        }catch (Exception e1){
+//
+//        }
         return JSON.parseObject(json.trim(), type);
     }
 }

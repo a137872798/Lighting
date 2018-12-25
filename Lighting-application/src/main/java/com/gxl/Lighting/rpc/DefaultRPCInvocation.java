@@ -8,6 +8,7 @@ import com.gxl.Lighting.loadbalance.LoadBalanceFactory;
 import com.gxl.Lighting.loadbalance.RoundRobinLoadBalance;
 import com.gxl.Lighting.logging.InternalLogger;
 import com.gxl.Lighting.logging.InternalLoggerFactory;
+import com.gxl.Lighting.netty.enums.SerializationEnum;
 import com.gxl.Lighting.netty.meta.RegisterMeta;
 import com.gxl.Lighting.monitor.StatisticContext;
 import com.gxl.Lighting.netty.enums.InvokeTypeEnum;
@@ -64,6 +65,9 @@ public class DefaultRPCInvocation implements RPCInvocation {
             param.setServiceName(serviceName);
             param.setMethodName(methodName);
             param.setAddress(address);
+            Request collectionRequest = Request.createRequest(RequestEnum.COLLECT, param);
+            collectionRequest.setInvokeType(InvokeTypeEnum.ONEWAY.getInvokeType());
+            collectionRequest.setSerialization(SerializationEnum.JSON.getSerialization());
             if (!future.getResponse().getResult().isSuccess()) {
                 logger.warn("异步调用{}，出错exception{}, msg{}", address, response.getResult().getCause(), response.getResult().getErrorMsg());
                 RPCRetry retry = new RPCRetry();
@@ -73,12 +77,12 @@ public class DefaultRPCInvocation implements RPCInvocation {
                 retry.setAddress(newAddress);
                 param.setSuccess(false);
                 logger.info("将数据发往监控中心"+ param.toString());
-                consumer.getClient().oneWay(consumer.getMonitorAddress(), Request.createRequest(RequestEnum.COLLECT, param));
+                consumer.getClient().oneWay(consumer.getMonitorAddress(), collectionRequest);
                 queue.add(retry);
             } else {
                 param.setSuccess(true);
                 logger.info("将数据发往监控中心"+ param.toString());
-                consumer.getClient().oneWay(consumer.getMonitorAddress(), Request.createRequest(RequestEnum.COLLECT, param));
+                consumer.getClient().oneWay(consumer.getMonitorAddress(), collectionRequest);
                 consumer.setService(response.getResult().getResult());
             }
         }
@@ -127,6 +131,7 @@ public class DefaultRPCInvocation implements RPCInvocation {
         String providerAddress = providerInfo.getAddress();
 
         if (isVip) {
+            logger.info("本次请求使用vip服务" + param.toString());
             providerAddress = converVip(providerAddress);
         }
 
@@ -159,6 +164,9 @@ public class DefaultRPCInvocation implements RPCInvocation {
                 long end = System.currentTimeMillis();
                 long useTime = end - start;
                 collect.setTime(useTime);
+                Request collectionRequest = Request.createRequest(RequestEnum.COLLECT, collect);
+                collectionRequest.setSerialization(SerializationEnum.JSON.getSerialization());
+                collectionRequest.setInvokeType(InvokeTypeEnum.ONEWAY.getInvokeType());
                 if (!response.getResult().isSuccess()) {
                     logger.warn("访问地址{}时出现：exception{}, msg{}", providerAddress, response.getResult().getCause(), response.getResult().getErrorMsg());
                     logger.info("更换地址后进行重试");
@@ -171,12 +179,12 @@ public class DefaultRPCInvocation implements RPCInvocation {
                     queue.add(retry);
                     collect.setSuccess(false);
                     logger.info("将数据发往监控中心"+ collect.toString());
-                    consumer.getClient().oneWay(consumer.getMonitorAddress(), Request.createRequest(RequestEnum.COLLECT, collect));
+                    consumer.getClient().oneWay(consumer.getMonitorAddress(), collectionRequest);
                     return null;
                 } else {
                     collect.setSuccess(true);
                     logger.info("将数据发往监控中心"+ collect.toString());
-                    consumer.getClient().oneWay(consumer.getMonitorAddress(), Request.createRequest(RequestEnum.COLLECT, collect));
+                    consumer.getClient().oneWay(consumer.getMonitorAddress(), collectionRequest);
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();

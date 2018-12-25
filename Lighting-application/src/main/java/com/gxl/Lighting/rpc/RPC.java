@@ -10,7 +10,7 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface RPC {
 
-    long timeout() default 100000;
+    long timeout() default 1000;
 
     /**
      * 使用的 负载策略
@@ -22,14 +22,14 @@ public @interface RPC {
      * 是否使用vip端口  vip端口的 端口号默认比普通的 多2
      * @return
      */
-    boolean vip() default false;
+    boolean vip() default true;
 
 
     /**
      * 通信使用的序列化方式
      * @return
      */
-    String serialization() default "json";
+    String serialization() default "hessian";
 
     /**
      * 通信方式  A:async S:sync O:oneWay
